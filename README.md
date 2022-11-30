@@ -1,4 +1,8 @@
 # msPHATE-Seurat
+Things are always changing, quoted code here may not be the same as most current code in actual scripts
+Should still give you half an idea on how to use the scripts
+By Christmas I will upload my lab notes, a report, and other tidbits
+
 ## Key variables
 
 ### R_prework.R

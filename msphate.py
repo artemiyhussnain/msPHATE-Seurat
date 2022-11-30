@@ -18,7 +18,6 @@ mincells = 3
 npca = 20
 gran = 0.1
 run_multiple_embeddings=False
-generate_tree=True
 multiple_spread = 1
 vis_level = 0
 clus_level = 3
@@ -31,7 +30,10 @@ genes = []
 for i in marker_dict:
     for j in marker_dict[i]:
         genes.append(j)
-
+do_pickling = False
+generate_plots = False
+if run_multiple_embeddings:
+    generate_plots = True
 
 wdir = os.path.expanduser(wdir)
 gene_path = os.path.join(wdir, 'gene_names.txt')
@@ -54,23 +56,22 @@ if do_scaling:
     # Can QC'd and normalised counts matrix be imported from Seurat?
 else:
     print('Loading scaled data...')
-    data_path = os.path.join(wdir, 'counts.mtx')
-    data = scprep.io.load_mtx(data_path, cell_axis='column',
+    data_path = os.path.join(wdir, 'counts.csv')
+    data = scprep.io.load_csv(data_path, cell_axis='column',
                               gene_names=gene_path,
-                              cell_names=cell_path,
-                              sparse=True)
+                              cell_names=cell_path)
 
-print('Finding levels...')
 mp_op = mp.Multiscale_PHATE(n_pca=npca, granularity=gran, random_state=0)
 levels = mp_op.fit(data)
-ax = plt.plot(mp_op.gradient)
-ax = plt.scatter(levels, mp_op.gradient[levels], c = 'r', s=100)
-f_dir = os.path.expanduser(wdir)
-f_name = os.path.join(f_dir, 'levels.png')
-plt.savefig(fname=f_name)
-plt.close()
+if generate_plots:
+    ax = plt.plot(mp_op.gradient)
+    ax = plt.scatter(levels, mp_op.gradient[levels], c = 'r', s=100)
+    f_dir = os.path.expanduser(wdir)
+    f_name = os.path.join(f_dir, 'levels.png')
+    plt.savefig(fname=f_name)
+    plt.close()
 
-if generate_tree:
+if generate_plots:
     tree = mp_op.build_tree()
     tree_clusters = mp_op.get_tree_clusters(levels[-1*clus_level])
     scprep.plot.scatter3d(tree, c = tree_clusters, s= 50,
@@ -86,25 +87,27 @@ if run_multiple_embeddings:
         for j in [-1*clus_level, -1*clus_level+multiple_spread, -1*clus_level-multiple_spread]:
             embedding, clusters, sizes = mp_op.transform(visualization_level = levels[i],
                                                          cluster_level = levels[j])
-            scprep.plot.scatter2d(embedding, s = 100*np.sqrt(sizes), c = clusters,
-                                  fontsize=16, ticks=False,
-                                  label_prefix="Multiscale PHATE", figsize=(10,8))
-            f_dir = os.path.expanduser(wdir)
-            custom_name = 'embedding_vis' + str(i) + '_clus' + str(-1*j)+ '.png'
-            f_name = os.path.join(f_dir, custom_name)
-            plt.savefig(fname=f_name)
-            plt.close()
+            if generate_plots:
+                scprep.plot.scatter2d(embedding, s = 100*np.sqrt(sizes), c = clusters,
+                                      fontsize=16, ticks=False,
+                                      label_prefix="Multiscale PHATE", figsize=(10,8))
+                f_dir = os.path.expanduser(wdir)
+                custom_name = 'embedding_vis' + str(i) + '_clus' + str(j)+ '.png'
+                f_name = os.path.join(f_dir, custom_name)
+                plt.savefig(fname=f_name)
+                plt.close()
 else:
     embedding, clusters, sizes = mp_op.transform(visualization_level = levels[vis_level],
                                                          cluster_level = levels[-1*clus_level])
-    scprep.plot.scatter2d(embedding, s = 100*np.sqrt(sizes), c = clusters,
-                                  fontsize=16, ticks=False,
-                                  label_prefix="Multiscale PHATE", figsize=(10,8))
-    f_dir = os.path.expanduser(wdir)
-    custom_name = 'embedding_vis' + str(vis_level) + '_clus' + str(clus_level)+ '.png'
-    f_name = os.path.join(f_dir, custom_name)
-    plt.savefig(fname=f_name)
-    plt.close()
+    if generate_plots:
+        scprep.plot.scatter2d(embedding, s = 100*np.sqrt(sizes), c = clusters,
+                                      fontsize=16, ticks=False,
+                                      label_prefix="Multiscale PHATE", figsize=(10,8))
+        f_dir = os.path.expanduser(wdir)
+        custom_name = 'embedding_vis' + str(vis_level) + '_clus' + str(clus_level)+ '.png'
+        f_name = os.path.join(f_dir, custom_name)
+        plt.savefig(fname=f_name)
+        plt.close()
 
 
 print('Finding expression')
@@ -113,15 +116,14 @@ for i in range(len(genes)):
     expression[genes[i]] = mp_op.get_expression(data[genes[i]].values,
     visualization_level = levels[vis_level])
 
-print('Pickling important files...')
-keep = [embedding, clusters, sizes, data]
-keep_names = ['embedding', 'clusters', 'sizes', 'data', 'expression']
-for i in range(len(keep)):
-    pickle_out = open(keep_names[i] + '.pickle', 'wb')
-    pickle.dump(keep[i], pickle_out)
-    pickle_out.close()
-
-# Pickling into folder is not working due to TypeError, don't know why
+if do_pickling:
+    print('Pickling important files...')
+    keep = [embedding, clusters, sizes, data]
+    keep_names = ['embedding', 'clusters', 'sizes', 'data', 'expression']
+    for i in range(len(keep)):
+        pickle_out = open(keep_names[i] + '.pickle', 'wb')
+        pickle.dump(keep[i], pickle_out)
+        pickle_out.close()
 
 print('Exporting embedding and clusters...')
 msPHATE_embedding = pd.DataFrame(embedding,

@@ -3,20 +3,19 @@ library(Seurat)
 library(patchwork)
 library(Matrix)
 
-data_file = '~/Jansky/data/adrenal_medulla_Seurat.RDS.gz'
-wdir = '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat'
 use_scaled = TRUE
 
-medulla_seurat <- readRDS(file = data_file)
+med <- readRDS('adrenal_medulla_Seurat.RDS.gz')
+
 if (use_scaled) {
-  write.table(GetAssayData(medulla_seurat, 'scale.data'), 
-              file = paste(wdir, 'counts_scaled.csv', sep = "/"), 
+  write.table(GetAssayData(med, 'scale.data'), 
+              file = 'counts.csv', 
               sep = ',', row.names = FALSE, col.names = FALSE)
 } else {
-  writeMM(medulla_seurat@assays$RNA@counts, paste(wdir, 'counts.mtx', sep = ""))
+  writeMM(medulla_seurat@assays$RNA@counts, 'counts.mtx')
 }
 
-write.table(colnames(medulla_seurat), file = paste(wdir, 'cell_names.txt', sep = "/"),
+write.table(colnames(GetAssayData(med, 'scale.data')), file = 'cell_names.txt',
             sep = ',', row.names = FALSE, col.names = FALSE)
-write.table(rownames(medulla_seurat), file = paste(wdir, 'gene_names.txt', sep = "/"),
+write.table(rownames(GetAssayData(med, 'scale.data')), file = 'gene_names.txt',
             sep = ',', row.names = FALSE, col.names = FALSE)
