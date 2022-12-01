@@ -18,9 +18,10 @@ mincells = 3
 npca = 20
 gran = 0.1
 run_multiple_embeddings=False
+find_expression = False
 multiple_spread = 1
 vis_level = 0
-clus_level = 5
+clus_level = 3
 zoom_cluster = 1
 marker_dict = {'SCPs': ['SOX10', 'PLP1', 'ERBB3', 'MPZ', 'FOXD3'],
                'Neuroblasts': ['ISL1', 'STMN2', 'NEFM'],
@@ -59,7 +60,7 @@ if do_scaling:
 else:
     print('Loading scaled data...')
     data_path = os.path.join(wdir, 'counts.csv')
-    data = scprep.io.load_csv(data_path, cell_axis='row',
+    data = scprep.io.load_csv(data_path, cell_axis='column',
                               gene_names=gene_path,
                               cell_names=cell_path)
 
@@ -117,12 +118,12 @@ else:
             plt.savefig(fname=f_name)
             plt.close()
 
-
-print('Finding expression')
-expression = pd.DataFrame()
-for i in range(len(genes)):
-    expression[genes[i]] = mp_op.get_expression(data[genes[i]].values,
-    visualization_level = levels[vis_level])
+if find_expression:
+    print('Finding expression')
+    expression = pd.DataFrame()
+    for i in range(len(genes)):
+        expression[genes[i]] = mp_op.get_expression(data[genes[i]].values,
+        visualization_level = levels[vis_level])
 
 if do_pickling:
     print('Pickling important files...')
