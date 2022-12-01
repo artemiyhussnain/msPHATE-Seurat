@@ -4,6 +4,14 @@ library(patchwork)
 library(Matrix)
 library (ggplot2)
 
+### RESET ###
+wdir = '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
+med <- readRDS(file = paste(wdir, 'med_msphate.RDS', sep = ''))
+
+Idents(med) <- 'jansky_idents' # Or just group.by jansky_idents
+Idents(med) <- 'msphate_clusters' # opposite
+### RESET ###
+
 # Basic visualisation
 DimPlot(med, reduction = 'msphate', group.by = 'msphate_clusters', pt.size = 1)
 

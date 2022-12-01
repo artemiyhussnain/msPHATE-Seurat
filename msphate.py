@@ -20,7 +20,8 @@ gran = 0.1
 run_multiple_embeddings=False
 multiple_spread = 1
 vis_level = 0
-clus_level = 3
+clus_level = 5
+zoom_cluster = 1
 marker_dict = {'SCPs': ['SOX10', 'PLP1', 'ERBB3', 'MPZ', 'FOXD3'],
                'Neuroblasts': ['ISL1', 'STMN2', 'NEFM'],
                'Chromaffin cells': ['DBH', 'PHOX2B']}
@@ -32,6 +33,7 @@ for i in marker_dict:
         genes.append(j)
 do_pickling = False
 generate_plots = False
+do_zoom=False
 if run_multiple_embeddings:
     generate_plots = True
 
@@ -57,7 +59,7 @@ if do_scaling:
 else:
     print('Loading scaled data...')
     data_path = os.path.join(wdir, 'counts.csv')
-    data = scprep.io.load_csv(data_path, cell_axis='column',
+    data = scprep.io.load_csv(data_path, cell_axis='row',
                               gene_names=gene_path,
                               cell_names=cell_path)
 
@@ -97,17 +99,23 @@ if run_multiple_embeddings:
                 plt.savefig(fname=f_name)
                 plt.close()
 else:
-    embedding, clusters, sizes = mp_op.transform(visualization_level = levels[vis_level],
-                                                         cluster_level = levels[-1*clus_level])
-    if generate_plots:
-        scprep.plot.scatter2d(embedding, s = 100*np.sqrt(sizes), c = clusters,
-                                      fontsize=16, ticks=False,
-                                      label_prefix="Multiscale PHATE", figsize=(10,8))
-        f_dir = os.path.expanduser(wdir)
-        custom_name = 'embedding_vis' + str(vis_level) + '_clus' + str(clus_level)+ '.png'
-        f_name = os.path.join(f_dir, custom_name)
-        plt.savefig(fname=f_name)
-        plt.close()
+    if do_zoom:
+        embedding, clusters, sizes = mp_op.transform(visualization_level = levels[vis_level],
+                                                     cluster_level = levels[-1*clus_level],
+                                                     coarse_cluster_level = levels[-1*clus_level],
+                                                     coarse_cluster=zoom_cluster)
+    else:
+        embedding, clusters, sizes = mp_op.transform(visualization_level = levels[vis_level],
+                                                             cluster_level = levels[-1*clus_level])
+        if generate_plots:
+            scprep.plot.scatter2d(embedding, s = 100*np.sqrt(sizes), c = clusters,
+                                          fontsize=16, ticks=False,
+                                          label_prefix="Multiscale PHATE", figsize=(10,8))
+            f_dir = os.path.expanduser(wdir)
+            custom_name = 'embedding_vis' + str(vis_level) + '_clus' + str(clus_level)+ '.png'
+            f_name = os.path.join(f_dir, custom_name)
+            plt.savefig(fname=f_name)
+            plt.close()
 
 
 print('Finding expression')
