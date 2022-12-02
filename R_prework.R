@@ -13,7 +13,7 @@ med <- readRDS('~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/adrenal_medulla_
 
 # if (do_subset == TRUE) {
 #   use_scaled <- FALSE
-#   med<- readRDS(paste(wdir, 'med_msphate.RDS', sep = ''))
+#   med <- readRDS(paste(wdir, 'med_msphate.RDS', sep = ''))
 # clus <- colnames(subset(med, subset = msphate_clusters == '1'))
 # scale_data <- GetAssayData(med, 'scale.data')
 # scale_subset <- scaled_data[colnames(scaled_data) %in% clus]

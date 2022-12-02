@@ -1,3 +1,48 @@
+---
+title: "Integrating msPHATE, UMAP, and tSNE to explore scRNA-seq data"
+output: pdf_document
+date: "2022-12-02"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The deal
+
+Here is the deal I am proposing. A good workflow is to do global clustering on published, normalised, scaled data with msPHATE, manually merge clusters if necessary based on heatmaps, subset a global msPHATE cluster of interest into a separate Seurat object, recluster that with Louvain algorithm in Seurat, and visualise the result with tSNE.
+
+Considerations:
+- Split initial msPHATE clusters? Can define gene modules to do this automatically...
+- Need to zoom into msPHATE global clusters because zooming into one UMAP cluster was bad once. See if umap/tsne clusters are always unfit for zooming
+- Does scaling need to be rerun when reclustering? Check literature (they 're-embedded' the)
+
+There is also another potential arm to this project. I want to functionally annotate the clusters I find, either with the above msPHATE-UMAP-tSNE workflow or jus the clusters from a study.
+
+```{r libraries}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(Matrix)
+library(ggplot2)
+```
+
+```{r global_prework}
+wdir <- '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
+data_name <- 'adrenal_medulla_Seurat.RDS.gz'
+med <- readRDS(paste(wdir, data_name, sep = ''))
+
+write.table(GetAssayData(med, 'scale.data'), file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(GetAssayData(med, 'scale.data')), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(GetAssayData(med, 'scale.data')), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+```
+
+Insert explanation of above
+
+
+```{python msphate}
+### DO NOT RUN IN Rmd!!! Python chunks a bit funny in R
+# Script is bloated, will fix later
+
 import multiscale_phate as mp
 import numpy as np
 import pandas as pd
@@ -21,7 +66,7 @@ run_multiple_embeddings=False
 find_expression = False
 multiple_spread = 1
 vis_level = 0
-clus_level = 2
+clus_level = 3
 zoom_cluster = 1
 marker_dict = {'SCPs': ['SOX10', 'PLP1', 'ERBB3', 'MPZ', 'FOXD3'],
                'Neuroblasts': ['ISL1', 'STMN2', 'NEFM'],
@@ -144,3 +189,99 @@ msPHATE_clusters.to_csv('msPHATE_clusters.csv', header=False, index=False)
 print(data)
 print(levels)
 print('Done')
+```
+
+Insert explanation of above
+
+- vis_level = 0 (always!)
+- clus_level = 2
+
+
+```{r global_postwork}
+msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding <- as.matrix(msPHATE_embedding)
+med[['msphate']] <- CreateDimReducObject(embeddings = msPHATE_embedding, key = 'msPHATE_')
+
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+med$msphate_clusters <- msPHATE_clusters
+
+med$jansky_idents <- Idents(med)
+Idents(med) <- 'msphate_clusters'
+DimPlot(med, reduction = 'msphate', pt.size = 1)
+saveRDS(med, file = paste(wdir, 'med_msphate_global_clus2.RDS', sep = ''))
+```
+
+``` {r global_cluster_renaming}
+med$msphate_orig_clusters <- Idents(med)
+msphate_new_idents <- c('1', '2', '3', '4', '5', '6', '7')
+names(msphate_new_idents) <- levels(med)
+med <- RenameIdents(med, msphate_new_idents)
+med$msphate_clusters <- Idents(med)
+DimPlot(med, reduction = 'msphate', pt.size = 1)
+```
+
+```{r global_cluster_merging}
+msphate_varmarkers_global1 <- FindAllMarkers(med, features = VariableFeatures(med))
+msphate_varmarkers_global1 %>%
+  group_by(cluster) %>%
+  top_n(n = 7, wt = avg_log2FC) -> top_de
+DoHeatmap(med, features = top_de$gene) + NoLegend()
+
+msphate_new_idents <- c('1', '2', '1', '3', '3', '4')
+names(msphate_new_idents) <- levels(med)
+med <- RenameIdents(med, msphate_new_idents)
+med$msphate_clusters <- Idents(med)
+
+Idents(med) <- 'msphate_clusters' # Necessary to run findallmarkers correctly
+msphate_varmarkers_global2 <- FindAllMarkers(med, features = VariableFeatures(med))
+msphate_varmarkers_global2 %>%
+  group_by(cluster) %>%
+  top_n(n = 7, wt = avg_log2FC) -> top_de
+DoHeatmap(med, features = top_de$gene) + NoLegend()
+```
+
+- Something broke here so I can't rerun at the moment
+
+``` {r cluster_subsetting}
+clus <- subset(med, subset = msphate_new_clusters2 == '2')
+scaled_data <- GetAssayData(clus, 'scale.data')
+wdir = '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
+write.table(scaled_data, 
+            file = paste(wdir, 'counts.csv', sep = ''), 
+            sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(scaled_data), file = paste(wdir, 'gene_names.txt', sep = ''), 
+            sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(scaled_data), file = paste(wdir, 'cell_names.txt', sep = ''), 
+            sep = ',', row.names = FALSE, col.names = FALSE)
+
+## Python section
+
+msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), 
+                              header=FALSE,
+                              row.names = 1, 
+                              col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding <- as.matrix(msPHATE_embedding)
+clus[['msphate']] <- CreateDimReducObject(embeddings = msPHATE_embedding, key = 'msPHATE_')
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+clus$msphate_clusters <- msPHATE_clusters
+clus$jansky_idents <- Idents(clus)
+Idents(clus) <- 'msphate_clusters'
+DimPlot(clus, reduction = 'msphate')
+
+msphate_new_idents <- c('1', '2', '3', '4', '5')
+names(msphate_new_idents) <- levels(clus)
+clus <- RenameIdents(clus, msphate_new_idents)
+clus$msphate_clusters <- Idents(clus)
+Idents(clus) <- 'msphate_clusters'
+DimPlot(clus, reduction = 'msphate')
+
+msphate_varmarkers_clus2 <- FindAllMarkers(clus, features = VariableFeatures(clus))
+msphate_varmarkers_clus2 %>%
+  group_by(cluster) %>%
+  top_n(n = 7, wt = avg_log2FC) -> top_de
+DoHeatmap(clus, features = top_de$gene) + NoLegend()
+```
+
+- From this point on it's play4, will write it up properly on Monday
