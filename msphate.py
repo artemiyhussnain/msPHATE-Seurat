@@ -17,7 +17,7 @@ min_reads = 200
 mincells = 3
 npca = 20
 gran = 0.1
-run_multiple_embeddings=False
+run_multiple_embeddings = False
 find_expression = False
 multiple_spread = 1
 vis_level = 0
@@ -27,14 +27,12 @@ marker_dict = {'SCPs': ['SOX10', 'PLP1', 'ERBB3', 'MPZ', 'FOXD3'],
                'Neuroblasts': ['ISL1', 'STMN2', 'NEFM'],
                'Chromaffin cells': ['DBH', 'PHOX2B']}
 
-names = list(marker_dict.keys())
 genes = []
-for i in marker_dict:
-    for j in marker_dict[i]:
-        genes.append(j)
-do_pickling = False
+for gene_list in marker_dict.values():
+    genes.extend(gene_list)
+
 generate_plots = False
-do_zoom=False
+do_zoom = False
 if run_multiple_embeddings:
     generate_plots = True
 
@@ -53,7 +51,7 @@ if do_scaling:
     print('Filtering and normalising...')
     data = scprep.filter.filter_library_size(data, cutoff=min_reads,
                                              keep_cells='above')
-    data = scprep.filter.filter_rare_genes(data, min_cells = mincells)
+    data = scprep.filter.filter_rare_genes(data, min_cells=mincells)
     data = scprep.normalize.library_size_normalize(data)
     data = np.sqrt(data)
     # Can QC'd and normalised counts matrix be imported from Seurat?
@@ -68,7 +66,7 @@ mp_op = mp.Multiscale_PHATE(n_pca=npca, granularity=gran, random_state=0)
 levels = mp_op.fit(data)
 if generate_plots:
     ax = plt.plot(mp_op.gradient)
-    ax = plt.scatter(levels, mp_op.gradient[levels], c = 'r', s=100)
+    ax = plt.scatter(levels, mp_op.gradient[levels], c='r', s=100)
     f_dir = os.path.expanduser(wdir)
     f_name = os.path.join(f_dir, 'levels.png')
     plt.savefig(fname=f_name)
@@ -76,67 +74,57 @@ if generate_plots:
 
 if generate_plots:
     tree = mp_op.build_tree()
-    tree_clusters = mp_op.get_tree_clusters(levels[-1*clus_level])
-    scprep.plot.scatter3d(tree, c = tree_clusters, s= 50,
-                          fontsize=16, ticks=False, figsize=(10,10))
+    tree_clusters = mp_op.get_tree_clusters(levels[-1 * clus_level])
+    scprep.plot.scatter3d(tree, c=tree_clusters, s=50,
+                          fontsize=16, ticks=False, figsize=(10, 10))
     f_dir = os.path.expanduser(wdir)
     f_name = os.path.join(f_dir, 'tree.png')
     plt.savefig(fname=f_name)
     plt.close()
 
+
+def _scatter2d(filename, embedding, clusters, sizes):
+    scprep.plot.scatter2d(embedding, s=100 * np.sqrt(sizes), c=clusters,
+                          fontsize=16, ticks=False,
+                          label_prefix="Multiscale PHATE", figsize=(10, 8))
+    f_dir = os.path.expanduser(wdir)
+    f_name = os.path.join(f_dir, filename)
+    plt.savefig(fname=f_name)
+    plt.close()
+
+
 print('Generating embedding(s)...')
 if run_multiple_embeddings:
-    for i in range(vis_level, round(len(levels)/2)+multiple_spread, 2):
-        for j in [-1*clus_level, -1*clus_level+multiple_spread, -1*clus_level-multiple_spread]:
-            embedding, clusters, sizes = mp_op.transform(visualization_level = levels[i],
-                                                         cluster_level = levels[j])
+    for i in range(vis_level, round(len(levels) / 2) + multiple_spread, 2):
+        for j in [-1 * clus_level, -1 * clus_level + multiple_spread, -1 * clus_level - multiple_spread]:
+            embedding, clusters, sizes = mp_op.transform(visualization_level=levels[i],
+                                                         cluster_level=levels[j])
             if generate_plots:
-                scprep.plot.scatter2d(embedding, s = 100*np.sqrt(sizes), c = clusters,
-                                      fontsize=16, ticks=False,
-                                      label_prefix="Multiscale PHATE", figsize=(10,8))
-                f_dir = os.path.expanduser(wdir)
-                custom_name = 'embedding_vis' + str(i) + '_clus' + str(j)+ '.png'
-                f_name = os.path.join(f_dir, custom_name)
-                plt.savefig(fname=f_name)
-                plt.close()
+                custom_name = 'embedding_vis' + str(i) + '_clus' + str(j) + '.png'
+                _scatter2d(custom_name, embedding, clusters, sizes)
 else:
     if do_zoom:
-        embedding, clusters, sizes = mp_op.transform(visualization_level = levels[vis_level],
-                                                     cluster_level = levels[-1*clus_level],
-                                                     coarse_cluster_level = levels[-1*clus_level],
+        embedding, clusters, sizes = mp_op.transform(visualization_level=levels[vis_level],
+                                                     cluster_level=levels[-1 * clus_level],
+                                                     coarse_cluster_level=levels[-1 * clus_level],
                                                      coarse_cluster=zoom_cluster)
     else:
-        embedding, clusters, sizes = mp_op.transform(visualization_level = levels[vis_level],
-                                                             cluster_level = levels[-1*clus_level])
+        embedding, clusters, sizes = mp_op.transform(visualization_level=levels[vis_level],
+                                                     cluster_level=levels[-1 * clus_level])
         if generate_plots:
-            scprep.plot.scatter2d(embedding, s = 100*np.sqrt(sizes), c = clusters,
-                                          fontsize=16, ticks=False,
-                                          label_prefix="Multiscale PHATE", figsize=(10,8))
-            f_dir = os.path.expanduser(wdir)
-            custom_name = 'embedding_vis' + str(vis_level) + '_clus' + str(clus_level)+ '.png'
-            f_name = os.path.join(f_dir, custom_name)
-            plt.savefig(fname=f_name)
-            plt.close()
+            custom_name = 'embedding_vis' + str(vis_level) + '_clus' + str(clus_level) + '.png'
+            _scatter2d(custom_name, embedding, clusters, sizes)
 
-if find_expression:
-    print('Finding expression')
-    expression = pd.DataFrame()
-    for i in range(len(genes)):
-        expression[genes[i]] = mp_op.get_expression(data[genes[i]].values,
-        visualization_level = levels[vis_level])
-
-if do_pickling:
     print('Pickling important files...')
-    keep = [embedding, clusters, sizes, data]
-    keep_names = ['embedding', 'clusters', 'sizes', 'data', 'expression']
-    for i in range(len(keep)):
-        pickle_out = open(keep_names[i] + '.pickle', 'wb')
-        pickle.dump(keep[i], pickle_out)
-        pickle_out.close()
+    data_to_save = {'embedding': embedding, 'clusters': clusters, 'sizes': sizes, 'data': data}
+
+    for name, data in data_to_save.items():
+        with open(f'{name}.pickle', 'wb') as pickle_out:
+            pickle.dump(data, pickle_out)
 
 print('Exporting embedding and clusters...')
 msPHATE_embedding = pd.DataFrame(embedding,
-                        index = pd.read_csv(cell_path, header=None).iloc[:, 0].to_list())
+                                 index=pd.read_csv(cell_path, header=None).iloc[:, 0].to_list())
 msPHATE_embedding.to_csv('msPHATE_embedding.csv', header=False)
 msPHATE_clusters = pd.DataFrame(clusters)
 msPHATE_clusters.to_csv('msPHATE_clusters.csv', header=False, index=False)
