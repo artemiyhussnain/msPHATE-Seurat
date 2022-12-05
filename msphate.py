@@ -21,7 +21,7 @@ run_multiple_embeddings=False
 find_expression = False
 multiple_spread = 1
 vis_level = 0
-clus_level = 2
+clus_level = 5
 zoom_cluster = 1
 marker_dict = {'SCPs': ['SOX10', 'PLP1', 'ERBB3', 'MPZ', 'FOXD3'],
                'Neuroblasts': ['ISL1', 'STMN2', 'NEFM'],
