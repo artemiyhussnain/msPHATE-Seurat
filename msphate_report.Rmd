@@ -1,0 +1,403 @@
+---
+title: "Integrating msPHATE, UMAP, and tSNE to explore scRNA-seq data"
+output: pdf_document
+date: "2022-12-02"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The deal
+
+Here is the deal I am proposing. A good workflow is to do global clustering on published, normalised, scaled data with msPHATE, manually merge clusters if necessary based on heatmaps, subset a global msPHATE cluster of interest into a separate Seurat object, recluster that with Louvain algorithm in Seurat, and visualise the result with tSNE.
+
+Considerations: - Split initial msPHATE clusters? Can define gene modules to do this automatically... - Need to zoom into msPHATE global clusters because zooming into one UMAP cluster was bad once. See if umap/tsne clusters are always unfit for zooming - Does scaling need to be rerun when reclustering? Check literature (they 're-embedded' the)
+
+There is also another potential arm to this project. I want to functionally annotate the clusters I find, either with the above msPHATE-UMAP-tSNE workflow or jus the clusters from a study.
+
+## The process
+
+### Running msPHATE
+```{r libraries}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(Matrix)
+library(ggplot2)
+```
+
+```{r global_prework}
+wdir <- '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
+data_name <- 'adrenal_medulla_Seurat.RDS.gz'
+med <- readRDS(paste(wdir, data_name, sep = ''))
+
+GetAssayData(med, 'scale.data') %>% as.data.frame() %>% rownames_to_column(var='genes') %>% filter(genes %in% VariableFeatures(med)) %>% column_to_rownames(var="genes") -> varfeature_scaleddata
+write.table(varfeature_scaleddata, file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(varfeature_scaleddata), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(varfeature_scaleddata), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+
+
+
+write.table(GetAssayData(med, 'scale.data'), file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(GetAssayData(med, 'scale.data')), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(GetAssayData(med, 'scale.data')), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+```
+
+Insert explanation of above
+
+```{python msphate}
+### DO NOT RUN IN Rmd!!! Python chunks a bit funny in R
+# Script is bloated, will fix later
+
+import multiscale_phate as mp
+import numpy as np
+import pandas as pd
+import scprep
+import os
+import matplotlib.pyplot as plt
+import pickle
+
+# Seurat: unsure how to find out QC from seurat object
+# Assuming tutorial defaults
+# Seurat: FindNeighbours used 20 PC's
+# Seurat: FindClusters (resolution = 1.2)
+# Shunya's report: min 500 genes, min 1000 counts, max 2.5% mt - where are QC params from?
+wdir = '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat'
+do_scaling = False
+min_reads = 200
+mincells = 3
+npca = 20
+gran = 0.1
+run_multiple_embeddings=False
+find_expression = False
+multiple_spread = 1
+vis_level = 0
+clus_level = 3
+zoom_cluster = 1
+marker_dict = {'SCPs': ['SOX10', 'PLP1', 'ERBB3', 'MPZ', 'FOXD3'],
+               'Neuroblasts': ['ISL1', 'STMN2', 'NEFM'],
+               'Chromaffin cells': ['DBH', 'PHOX2B']}
+
+names = list(marker_dict.keys())
+genes = []
+for i in marker_dict:
+    for j in marker_dict[i]:
+        genes.append(j)
+do_pickling = False
+generate_plots = False
+do_zoom=False
+if run_multiple_embeddings:
+    generate_plots = True
+
+wdir = os.path.expanduser(wdir)
+gene_path = os.path.join(wdir, 'gene_names.txt')
+cell_path = os.path.join(wdir, 'cell_names.txt')
+
+if do_scaling:
+    print('Loading counts matrix...')
+    data_path = os.path.join(wdir, 'counts.mtx')
+    data = scprep.io.load_mtx(data_path, cell_axis='column',
+                              gene_names=gene_path,
+                              cell_names=cell_path,
+                              sparse=True)
+
+    print('Filtering and normalising...')
+    data = scprep.filter.filter_library_size(data, cutoff=min_reads,
+                                             keep_cells='above')
+    data = scprep.filter.filter_rare_genes(data, min_cells = mincells)
+    data = scprep.normalize.library_size_normalize(data)
+    data = np.sqrt(data)
+    # Can QC'd and normalised counts matrix be imported from Seurat?
+else:
+    print('Loading scaled data...')
+    data_path = os.path.join(wdir, 'counts.csv')
+    data = scprep.io.load_csv(data_path, cell_axis='column',
+                              gene_names=gene_path,
+                              cell_names=cell_path)
+
+mp_op = mp.Multiscale_PHATE(n_pca=npca, granularity=gran, random_state=0)
+levels = mp_op.fit(data)
+if generate_plots:
+    ax = plt.plot(mp_op.gradient)
+    ax = plt.scatter(levels, mp_op.gradient[levels], c = 'r', s=100)
+    f_dir = os.path.expanduser(wdir)
+    f_name = os.path.join(f_dir, 'levels.png')
+    plt.savefig(fname=f_name)
+    plt.close()
+
+if generate_plots:
+    tree = mp_op.build_tree()
+    tree_clusters = mp_op.get_tree_clusters(levels[-1*clus_level])
+    scprep.plot.scatter3d(tree, c = tree_clusters, s= 50,
+                          fontsize=16, ticks=False, figsize=(10,10))
+    f_dir = os.path.expanduser(wdir)
+    f_name = os.path.join(f_dir, 'tree.png')
+    plt.savefig(fname=f_name)
+    plt.close()
+
+print('Generating embedding(s)...')
+if run_multiple_embeddings:
+    for i in range(vis_level, round(len(levels)/2)+multiple_spread, 2):
+        for j in [-1*clus_level, -1*clus_level+multiple_spread, -1*clus_level-multiple_spread]:
+            embedding, clusters, sizes = mp_op.transform(visualization_level = levels[i],
+                                                         cluster_level = levels[j])
+            if generate_plots:
+                scprep.plot.scatter2d(embedding, s = 100*np.sqrt(sizes), c = clusters,
+                                      fontsize=16, ticks=False,
+                                      label_prefix="Multiscale PHATE", figsize=(10,8))
+                f_dir = os.path.expanduser(wdir)
+                custom_name = 'embedding_vis' + str(i) + '_clus' + str(j)+ '.png'
+                f_name = os.path.join(f_dir, custom_name)
+                plt.savefig(fname=f_name)
+                plt.close()
+else:
+    if do_zoom:
+        embedding, clusters, sizes = mp_op.transform(visualization_level = levels[vis_level],
+                                                     cluster_level = levels[-1*clus_level],
+                                                     coarse_cluster_level = levels[-1*clus_level],
+                                                     coarse_cluster=zoom_cluster)
+    else:
+        embedding, clusters, sizes = mp_op.transform(visualization_level = levels[vis_level],
+                                                             cluster_level = levels[-1*clus_level])
+        if generate_plots:
+            scprep.plot.scatter2d(embedding, s = 100*np.sqrt(sizes), c = clusters,
+                                          fontsize=16, ticks=False,
+                                          label_prefix="Multiscale PHATE", figsize=(10,8))
+            f_dir = os.path.expanduser(wdir)
+            custom_name = 'embedding_vis' + str(vis_level) + '_clus' + str(clus_level)+ '.png'
+            f_name = os.path.join(f_dir, custom_name)
+            plt.savefig(fname=f_name)
+            plt.close()
+
+if find_expression:
+    print('Finding expression')
+    expression = pd.DataFrame()
+    for i in range(len(genes)):
+        expression[genes[i]] = mp_op.get_expression(data[genes[i]].values,
+        visualization_level = levels[vis_level])
+
+if do_pickling:
+    print('Pickling important files...')
+    keep = [embedding, clusters, sizes, data]
+    keep_names = ['embedding', 'clusters', 'sizes', 'data', 'expression']
+    for i in range(len(keep)):
+        pickle_out = open(keep_names[i] + '.pickle', 'wb')
+        pickle.dump(keep[i], pickle_out)
+        pickle_out.close()
+
+print('Exporting embedding and clusters...')
+msPHATE_embedding = pd.DataFrame(embedding,
+                        index = pd.read_csv(cell_path, header=None).iloc[:, 0].to_list())
+msPHATE_embedding.to_csv('msPHATE_embedding.csv', header=False)
+msPHATE_clusters = pd.DataFrame(clusters)
+msPHATE_clusters.to_csv('msPHATE_clusters.csv', header=False, index=False)
+
+print(data)
+print(levels)
+print('Done')
+```
+
+Insert explanation of above
+
+-   vis_level = 0 (always!)
+-   clus_level = 3 (7 clusters, 2 gives 3 clusters)
+
+```{r global_postwork}
+msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding <- as.matrix(msPHATE_embedding)
+med[['msphate']] <- CreateDimReducObject(embeddings = msPHATE_embedding, key = 'msPHATE_')
+
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+med$msphate_clusters <- msPHATE_clusters
+
+med$jansky_idents <- Idents(med)
+Idents(med) <- 'msphate_clusters'
+DimPlot(med, reduction = 'msphate', pt.size = 1)
+#saveRDS(med, file = paste(wdir, 'med_msphate_global.RDS', sep = '')) # Time-consuming step
+```
+#### Dealing with its consequences
+```{r global_cluster_renaming}
+med$msphate_orig_clusters <- Idents(med)
+msphate_new_idents <- c('1', '2', '3', '4', '5', '6')
+names(msphate_new_idents) <- levels(med)
+med <- RenameIdents(med, msphate_new_idents)
+med$msphate_clusters_premerge <- Idents(med)
+DimPlot(med, reduction = 'msphate', pt.size = 1)
+```
+
+```{r global_cluster_renaming}
+med <- FindVariableFeatures(med)
+top_de <- head(VariableFeatures(med), 10)
+LabelPoints(VariableFeaturePlot(med), points = top_de, repel = TRUE)
+
+msphate_varmarkers_global1 <- FindAllMarkers(med, features = VariableFeatures(med))
+msphate_varmarkers_global1 %>%
+  group_by(cluster) %>%
+  top_n(n = 7, wt = avg_log2FC) -> top_de
+DoHeatmap(med, features = top_de$gene) + NoLegend()
+DimPlot(med, reduction = 'msphate', pt.size = 1)
+```
+- merging 4 and 5
+
+```{r global_cluster_merging}
+msphate_new_idents <- c('1', '2', '1', '3', '3', '4')
+names(msphate_new_idents) <- levels(med)
+med <- RenameIdents(med, msphate_new_idents)
+med$msphate_clusters <- Idents(med)
+DimPlot(med, reduction = 'msphate', pt.size = 1)
+
+Idents(med) <- 'msphate_clusters' # Necessary to run findallmarkers correctly
+msphate_varmarkers_global2 <- FindAllMarkers(med, features = VariableFeatures(med))
+msphate_varmarkers_global2 %>%
+  group_by(cluster) %>%
+  top_n(n = 7, wt = avg_log2FC) -> top_de
+DoHeatmap(med, features = top_de$gene) + NoLegend()
+```
+
+#### Comparing to Jansky
+
+- We can now do a few interesting things
+- How well do the clusters correlate to jansky ones?
+
+```{r global_msphate_play}
+DimPlot(med, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1.5)
+
+FeaturePlot(med, reduction = 'msphate', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.5) + 
+  coord_cartesian(xlim = c(-0.01, 0.02), ylim = c(-0.01, 0.02)) +
+FeaturePlot(med, reduction = 'umap', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.5)
+```
+- 1 - Bridge and some late SCPs, 2 - Neuroblasts and connecting + most late Chromaffins, 3 - most SCPs, 4 - Chromaffins, 5 - some late Chromaffins (fig 5 to fig 7)
+- Cycling cells cluster much better on a umap
+- PRBLEM
+
+
+### Reclustering
+
+- We can now zoom into a cluster of interest
+- This is specifically a feature of msPHATE and the reason for using it at all
+- Only 2 is uncertain
+- We'll zoom into ("re-embed") global msPHATE cluster 2
+
+#### Using msPHATE
+
+- Could recluster using msPHATE
+
+```{r ms_clus2_1}
+clus <- subset(med, subset = msphate_clusters %in% c('2')) # Syntax allows multiple clusters
+scaled_data_clus2 <- GetAssayData(clus, 'scale.data')
+wdir = '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
+write.table(scaled_data_clus2, 
+            file = paste(wdir, 'counts.csv', sep = ''), 
+            sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(scaled_data_clus2), file = paste(wdir, 'gene_names.txt', sep = ''), 
+            sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(scaled_data_clus2), file = paste(wdir, 'cell_names.txt', sep = ''), 
+            sep = ',', row.names = FALSE, col.names = FALSE)
+```
+
+```{python ms_clus2_2}
+## Python section
+```
+
+```{r ms_clus2_3}
+msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), 
+                              header=FALSE,
+                              row.names = 1, 
+                              col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding <- as.matrix(msPHATE_embedding)
+clus[['msphate']] <- CreateDimReducObject(embeddings = msPHATE_embedding, key = 'msPHATE_')
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+clus$msphate_clusters <- msPHATE_clusters
+Idents(clus) <- 'msphate_clusters'
+
+DimPlot(clus, reduction = 'msphate', pt.size = 1)
+```
+
+```{r ms_clus2_4}
+clus$msphate_orig_clusters <- Idents(clus)
+msphate_new_idents <- c('1', '2', '3', '4', '5', '6', '7')
+names(msphate_new_idents) <- levels(clus)
+clus <- RenameIdents(clus, msphate_new_idents)
+clus$msphate_clusters <- Idents(clus)
+Idents(clus) <- 'msphate_clusters'
+DimPlot(clus, reduction = 'msphate', pt.size = 1)
+
+clus <- FindVariableFeatures(clus)
+top_de <- head(VariableFeatures(clus), 10)
+LabelPoints(VariableFeaturePlot(clus), points = top_de, repel = TRUE)
+
+msphate_varmarkers_clus2_1 <- FindAllMarkers(clus, features = VariableFeatures(clus))
+msphate_varmarkers_clus2_1 %>%
+  group_by(cluster) %>%
+  top_n(n = 7, wt = avg_log2FC) -> top_de
+DoHeatmap(clus, features = top_de$gene) + NoLegend()
+```
+- Merge 4 and 1 (heatmap)
+
+```{r ms_clus2_5}
+msphate_new_idents <- c('1', '2', '3', '1', '4', '5', '6')
+names(msphate_new_idents) <- levels(clus)
+clus <- RenameIdents(clus, msphate_new_idents)
+clus$msphate_clusters <- Idents(clus)
+DimPlot(clus, reduction = 'msphate', pt.size = 1)
+
+msphate_varmarkers_clus2_2 <- FindAllMarkers(clus, features = VariableFeatures(clus))
+msphate_varmarkers_clus2_2 %>%
+  group_by(cluster) %>%
+  top_n(n = 7, wt = avg_log2FC) -> top_de
+DoHeatmap(clus, features = top_de$gene) + NoLegend()
+```
+- So what's with these clusters? Are they early/late stages? Are they cycling/non-cycling cells?
+
+```{r ms_clus2_play1}
+mjt <- DimPlot(clus, reduction = 'msphate', group.by = 'jansky_idents', split.by = 'timepoint2', pt.size = 1, combine = FALSE)
+
+mt <- DimPlot(clus, reduction = 'msphate', split.by = 'timepoint2', pt.size = 1, combine=FALSE)
+
+fp <- FeaturePlot(clus, reduction = 'msphate', split.by = 'timepoint2', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.5, combine = FALSE)
+fp[[4]] + coord_cartesian(xlim = c(-0.015, 0.02), ylim = c(-0.02, 0.02)) + NoLegend() + fp[[5]] + coord_cartesian(xlim = c(-0.015, 0.02), ylim = c(-0.02, 0.02)) + NoLegend() + fp[[6]] + coord_cartesian(xlim = c(-0.015, 0.02), ylim = c(-0.02, 0.02)) + NoLegend() + fp[[1]] + coord_cartesian(xlim = c(-0.015, 0.02), ylim = c(-0.02, 0.02)) + NoLegend() + fp[[2]] + coord_cartesian(xlim = c(-0.015, 0.02), ylim = c(-0.02, 0.02)) + NoLegend() + fp[[3]] + coord_cartesian(xlim = c(-0.015, 0.02), ylim = c(-0.02, 0.02))
+```
+
+- We see that sub-clusters 1, 2, 3 are being replaced with 4 and 6 (possibly 5)
+- From Jansky annotation, we can say that 1 - connecting Chromaffins, 2 - Neuroblasts, 3 - cycling Neuroblasts, 4 - Chromaffin cells, 6 - late Chromaffin cells
+- 5 is indeterminate, perhaps a novel, distinct population of cycling Neuroblasts, most prominent at 11 pcw?
+- Let's look at the difference between sub-clusters 3 and 5
+- I think it's possible to put these finer clusters into a global diagram, maybe just by combining ggplot objects?? Or through metadata
+
+##### Novel subpopulation of cycling neuroblasts?
+
+- First approach is to compare difference in markers between 3 and 5
+```{r ms_clus2_play2}
+diff_5_3_markers <- FindMarkers(clus, ident.1 = 5, ident.2 = 3)
+diff_5_3_markers['pct_diff'] <- diff_5_3_markers['pct.1'] - diff_5_3_markers['pct.2']
+diff_5_3_markers <- diff_5_3_markers[order(diff_5_3_markers$avg_log2FC), ]
+diff_5_3_markers
+
+diff_5_all_markers <- FindMarkers(clus, ident.1 = 5)
+diff_5_all_markers['pct_diff'] <- diff_5_all_markers['pct.1'] - diff_5_all_markers['pct.2']
+diff_5_all_markers <- diff_5_all_markers[order(diff_5_all_markers$avg_log2FC), ]
+diff_5_all_markers
+
+diff_53_all_markers <- FindMarkers(clus, cells.1 = WhichCells()) # Only FGF13
+
+unique_genes <- setdiff(diff_5_3_markers[1, ], diff_5_all_markers[1, ]) # Nothing, because FGF13 is turned off in cluster 5
+unique_genes
+```
+
+- It seems that the absence of FGF13 is the only distinction between clusters 5 and 3
+- Second approach is to take a subset of clus that includes 3 and 5, and zoom into it (same process as above)
+
+#### Using Louvain
+- We could also find sub-clusters of global msPHATE cluster 2 using Seurat
+
+``` {r seur_clus2}
+clus <- ScaleData(clus)
+clus <- RunPCA(object = clus)
+clus <- FindNeighbors(object = clus)
+clus <- FindClusters(object = clus, resolution = 0.3)
+clus <- RunUMAP(object = clus, features = VariableFeatures(clus))
+DimPlot(object = clus, reduction = "umap", pt.size=1)
+```
