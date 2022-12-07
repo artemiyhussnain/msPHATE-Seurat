@@ -11,6 +11,8 @@ library(patchwork)
 library(Matrix)
 library(ggplot2)
 library(tibble)
+library(cowplot)
+library(purrr)
 
 wdir <- '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
 clus0_2_fix_2k <- readRDS(paste(wdir, 'clus0_2_fix_2k.RDS', sep = ''))
@@ -129,8 +131,8 @@ global_markers_lvl5_2k %>%
 DoHeatmap(med_2k, features = top10_global_markers_lvl5_2k$gene) + NoLegend()
 ```
 
-- 1 and 5472 beg merging, when zooming in later I'll keep them together. From lvl5 heatmap, they are different in some important way, and I'll see that by zooming in
-- lvl4 best corresponds to jansky: 0 - bridge, 1+2736+5472 - chromaffins (connecting and proper), 2 - neuroblasts (proper, cycling, late - resolves in lvl5, can be confirmed by zooming), 10+3784 - SCPs
+(lvl4)1 and 5472 beg merging, when zooming in later I'll keep them together. From lvl5 heatmap, I can see they are different in some important way, and I'll see that by zooming in
+lvl4 best corresponds to jansky: 0 - bridge, 1+2736+5472 - chromaffins (connecting and proper), 2 - neuroblasts (proper, cycling, late - resolves in lvl5, can try to confirm by zooming), 10+3784 - SCPs
 
 Zoom into (lvl4)1+2736+5472 and (lvl2)0 and (lvl4)2 to resolve neuroblasts and chromaffins, (lvl4)10+3784 and (lvl3)0 to resolve bridge and SCPs
 
@@ -263,4 +265,25 @@ ccdiff_featplot_clus2_0_fix_2k <- FeaturePlot(clus0_2_fix_2k, reduction = 'mspha
 pdzrn_featplot_clus0_2_fix_2k + vwde_featplot_clus0_2_fix_2k + ccdiff_featplot_clus2_0_fix_2k +  DimPlot(clus0_2_fix_2k, reduction = 'msphate', group.by = 'msphate_subclusters_lvl3', pt.size = 1) + DimPlot(clus0_2_fix_2k, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1)
 
 DimPlot(clus0_2_fix_2k, reduction = 'msphate', split.by = 'timepoint2', group.by = 'msphate_subclusters_lvl3', pt.size = 1)
+```
+
+Need somebody to check my thinking
+Next, I found that it's possible to essentially FeaturePlot PCs driving cluters
+
+```{r clus0_2_fix_2k PCs}
+pc1 <- FeaturePlot(clus0_2_fix_2k, features = "PC_1", reduction = 'msphate') + coord_cartesian(xlim = c(-0.025, 0.065), ylim = c(-0.035, 0.035))
+pc2 <- FeaturePlot(clus0_2_fix_2k, features = "PC_2", reduction = 'msphate') + coord_cartesian(xlim = c(-0.025, 0.065), ylim = c(-0.035, 0.035))
+pc3 <- FeaturePlot(clus0_2_fix_2k, features = "PC_3", reduction = 'msphate') + coord_cartesian(xlim = c(-0.025, 0.065), ylim = c(-0.035, 0.035))
+pc1+pc2+pc3
+
+# pc3 - pc5 + pc4
+```
+
+```{r pc math}
+pcs <- FetchData(clus0_2_fix_2k, vars = c('PC_3', 'PC_5', 'PC_4', 'msPHATE_1', 'msPHATE_2'))
+pcs['score'] <- pcs['PC_3']-pcs['PC_5']+pcs['PC_4']
+
+loadings <- clus0_2_fix_2k@reductions$pca@feature.loadings
+clus0_2_fix_2k$score_1185 <- loadings[, 'PC_3'] - loadings[, 'PC_5'] + loadings[, 'PC_4']
+FeaturePlot(clus0_2_fix_2k, features = "score_1185", reduction = 'msphate') + coord_cartesian(xlim = c(-0.025, 0.065), ylim = c(-0.035, 0.035))
 ```
