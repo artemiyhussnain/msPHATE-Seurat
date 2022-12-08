@@ -26,6 +26,8 @@ library(patchwork)
 library(Matrix)
 library(ggplot2)
 library(tibble)
+library(cowplot)
+library(purrr)
 
 wdir <- '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
 data_name <- 'adrenal_medulla_Seurat.RDS.gz'
