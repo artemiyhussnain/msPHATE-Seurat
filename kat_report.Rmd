@@ -15,8 +15,12 @@ library(cowplot)
 library(purrr)
 wdir <- '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
 
-data_name <- 'med_msphate_lvls2345_2k_all.RDS'
-med <- readRDS(paste(wdir, data_name, sep = ''))
+med <- readRDS(paste(wdir, 'med_msphate_lvls2345_2k_all.RDS', sep = ''))
+med_unscaled <- readRDS(paste(wdir, 'med_msphate_lvl4_unscaled_2k.RDS', sep = ''))
+bcn <- readRDS(paste(wdir, 'bcn_scaled_lvl4_msphate_umap_tsne_2k.RDS', sep = ''))
+bcn_unscaled <- readRDS(paste(wdir, 'bcn_unscaled_lvl4_msphate_umap_tsne_2k.RDS', sep = ''))
+bcn_ms <- readRDS(paste(wdir, 'bcn_ms_scaled_lvls34_msphate_umap_tsne_2k.RDS', sep = ''))
+bcn_ms_unscaled <- readRDS(paste(wdir, 'bcn_ms_unscaled_lvls34_msphate_umap_tsne_2k.RDS', sep = ''))
 ```
 
 
@@ -244,7 +248,7 @@ DimPlot(med, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1)
 #saveRDS(scale_check, file = paste(wdir, 'med_msphate_lvls34_unscaled_2k.RDS'))
 ```
 
-## 3. Zooming into bridge, connecting chromaffins, and neuroblasts
+## 3.1. Zooming into bridge, connecting chromaffins, and neuroblasts using jansky_idents
 
 ```{r}
 bcn <- subset(med, subset = jansky_idents %in% c('Bridge', 'connecting Chromaffin cells', 'Neuroblasts', 'cycling Neuroblasts', 'late Neuroblasts'))
@@ -346,7 +350,7 @@ DimPlot(bcn, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1)
 ```
 
 
-## 3.1. Same, but using corresponding msPHATE clusters
+## 3.2. Same, but using corresponding msPHATE clusters
 
 Do I select them manually? Do I find msPHATE clusters overlapping with jansky names of interest? Will the above weirdness remain? I suspect not, as msPHATE clusters are 'designed' to be zoomed into
 
@@ -363,11 +367,11 @@ HoverLocator(DimPlot(med, reduction = 'msphate', group.by = 'msphate_clusters_lv
 #DimPlot(med, reduction = 'msphate', group.by = 'msphate_clusters_lvl5_2k', pt.size = 1)
 ```
 
-Zooming into combination of 0, 1, 2, 5 (Bridge, connecting + proper Chromaffin cells, Neuroblasts excluding late)
+Zooming into combination of 0, 1, 2, 5 (Bridge, connecting + proper Chromaffin cells, Neuroblasts)
 
 
 ```{r}
-bcn_ms <- subset(med, subset = msphate_clusters_lvl5_2k %in% c('0', '1', '2', '5'))
+bcn_ms <- subset(med, subset = msphate_clusters_lvl5_2k %in% c('0', '1', '2', '5', '1838', '3920'))
 bcn_ms <- subset(bcn_ms, subset = jansky_idents %in% c('Bridge', 'connecting Chromaffin cells', 'Neuroblasts', 'cycling Neuroblasts', 'late Neuroblasts'))
 bcn_ms <- FindVariableFeatures(bcn_ms)
 bcn_ms_unscaled <- bcn_ms
@@ -393,7 +397,8 @@ bcn_ms[['msphate']] <- CreateDimReducObject(embeddings = msPHATE_embedding_globa
 ```{r}
 msPHATE_clusters_global <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
 msPHATE_clusters_global <- factor(msPHATE_clusters_global)
-bcn_ms$msphate_subclusters_lvl4 <- msPHATE_clusters_global
+bcn_ms$msphate_subclusters_lvl3 <- msPHATE_clusters_global
+# Did lvls 3 and 4 manually
 ```
 
 ```{r}
@@ -414,7 +419,8 @@ bcn_ms_unscaled[['msphate']] <- CreateDimReducObject(embeddings = msPHATE_embedd
 ```{r}
 msPHATE_clusters_global <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
 msPHATE_clusters_global <- factor(msPHATE_clusters_global)
-bcn_ms_unscaled$msphate_subclusters_lvl4 <- msPHATE_clusters_global
+bcn_ms_unscaled$msphate_subclusters_lvl3 <- msPHATE_clusters_global
+# Did lvls 3 and 4 manually
 ```
 
 ```{r}
@@ -430,20 +436,20 @@ bcn_ms_unscaled <- FindClusters(object = bcn_ms_unscaled, resolution = 1.2)
 bcn_ms_unscaled <- RunUMAP(object = bcn_ms_unscaled, features = VariableFeatures(bcn_ms_unscaled))
 bcn_ms_unscaled <- RunTSNE(object = bcn_ms_unscaled, features = VariableFeatures(bcn_ms_unscaled))
 
-saveRDS(bcn_ms, file = paste(wdir, 'bcn_ms_scaled_lvl4_msphate_umap_tsne_2k.RDS', sep = ''))
-saveRDS(bcn_ms_unscaled, file = paste(wdir, 'bcn_ms_unscaled_lvl4_msphate_umap_tsne_2k.RDS', sep = ''))
+saveRDS(bcn_ms, file = paste(wdir, 'bcn_ms_scaled_lvls34_msphate_umap_tsne_2k.RDS', sep = ''))
+saveRDS(bcn_ms_unscaled, file = paste(wdir, 'bcn_ms_unscaled_lvls34_msphate_umap_tsne_2k.RDS', sep = ''))
 ```
 
 ```{r}
 #DimPlot(bcn_ms, reduction = 'msphate', group.by = 'msphate_subclusters_lvl3', pt.size = 1) +
 DimPlot(bcn_ms, reduction = 'msphate', group.by = 'msphate_subclusters_lvl4', pt.size = 1) +
 DimPlot(bcn_ms, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1) +
-FeaturePlot(bcn_ms, reduction = 'msphate', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE) + coord_cartesian(xlim = c(-0.025, 0.02), ylim = c(-0.015, 0.025))
+FeaturePlot(bcn_ms, reduction = 'msphate', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE) + coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.015, 0.02))
 
 #DimPlot(bcn_ms_unscaled, reduction = 'msphate', group.by = 'msphate_subclusters_lvl3', pt.size = 1) +
 DimPlot(bcn_ms_unscaled, reduction = 'msphate', group.by = 'msphate_subclusters_lvl4', pt.size = 1) +
 DimPlot(bcn_ms_unscaled, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1) +
-FeaturePlot(bcn_ms_unscaled, reduction = 'msphate', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine = FALSE) + coord_cartesian(xlim = c(-0.025, 0.02), ylim = c(-0.015, 0.025))
+FeaturePlot(bcn_ms_unscaled, reduction = 'msphate', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine = FALSE) + coord_cartesian(xlim = c(-0.015, 0.02), ylim = c(-0.015, 0.015))
 
 DimPlot(bcn_ms_unscaled, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) +
 DimPlot(bcn_ms, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) + 
@@ -468,3 +474,141 @@ DimPlot(bcn_ms, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) +
 DimPlot(bcn_ms, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1)
 ```
 
+## 4. Analysing plots
+
+### Zooming into jansky_idents
+
+#### msPHATE Scaled
+
+```{r}
+DimPlot(bcn, reduction = 'msphate', group.by = 'msphate_subclusters_lvl4', pt.size = 1) +
+  DimPlot(bcn, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1) +
+  FeaturePlot(bcn, reduction = 'msphate', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE) + coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.012, 0.016))
+
+DimPlot(bcn, reduction = 'msphate', group.by = 'jansky_idents', split.by = 'timepoint2', pt.size = 1)
+```
+- Late N separated from B+cC+N
+- Cycling N separated from late N - threshold selection by Jansky?
+- Unusual cells appearing at 11pcw, also gap in late Neuroblasts (experimental thing?)
+
+#### msPHATE Unscaled
+
+```{r}
+DimPlot(bcn_unscaled, reduction = 'msphate', group.by = 'msphate_subclusters_lvl4', pt.size = 1) +
+  DimPlot(bcn_unscaled, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1) +
+  FeaturePlot(bcn_unscaled, reduction = 'msphate', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine = FALSE) + coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.012, 0.016))
+
+DimPlot(bcn_unscaled, reduction = 'msphate', group.by = 'jansky_idents', split.by = 'timepoint2', pt.size = 1)
+```
+
+- Cell cycle appears smaller in magnitude (cycling Neuroblasts better correpond to N and late N than in scaled data fed into msPHATE)
+- Same unusual patch at 11pcw (confirmed by jansky_idents group.by), just more spread when using unscaled data
+- Unscaled generally more spread and more rep of magnitude
+
+
+#### tSNE unscaled/scaled
+
+```{r}
+DimPlot(bcn_unscaled, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) +
+  DimPlot(bcn, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) + 
+  coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.02, 0.025)) +
+  FeaturePlot(bcn_unscaled, reduction = 'tsne', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE) +
+  FeaturePlot(bcn, reduction = 'tsne', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE)
+```
+
+- Cycling cells are more spread throiugh data in unscaled, more separate in scaled
+
+```{r}
+DimPlot(bcn_unscaled, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) + 
+  DimPlot(bcn_unscaled, reduction = 'tsne', group.by = 'msphate_subclusters_lvl4', pt.size = 1) +
+  DimPlot(bcn_unscaled, reduction = 'tsne', group.by = 'seurat_clusters', pt.size = 1)
+
+DimPlot(bcn_unscaled, reduction = 'tsne', group.by = 'msphate_subclusters_lvl4', split.by = 'timepoint2', pt.size = 1)
+```
+
+- msPHATE clusters correspond well to tSNE embedding (not clustering)
+- Time course visible, but same info better on msPHATE plot
+
+#### UMAP unscaled/scaled
+
+```{r}
+DimPlot(bcn_unscaled, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) +
+  DimPlot(bcn, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) + 
+  coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.02, 0.025)) +
+  FeaturePlot(bcn_unscaled, reduction = 'umap', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE) +
+  FeaturePlot(bcn, reduction = 'umap', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE)
+```
+
+- No difference between scaled/unscaled
+- Cycling cells appear like scaled data in other methods (tightly separated group)
+
+```{r}
+DimPlot(bcn_unscaled, reduction = 'umap', group.by = 'jansky_idents', split.by = 'timepoint2', pt.size = 1)
+```
+- Very good for time course
+
+### Zooming into msPHATE clusters corresponding to jansky_idents
+
+#### msPHATE
+
+```{r}
+#DimPlot(bcn_ms, reduction = 'msphate', group.by = 'msphate_subclusters_lvl3', pt.size = 1) +
+DimPlot(bcn_ms, reduction = 'msphate', group.by = 'msphate_subclusters_lvl4', pt.size = 1) +
+DimPlot(bcn_ms, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1) +
+FeaturePlot(bcn_ms, reduction = 'msphate', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE) + coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.015, 0.02))
+
+DimPlot(bcn_ms_unscaled, reduction = 'msphate', group.by = 'msphate_subclusters_lvl3', pt.size = 1) +
+#DimPlot(bcn_ms_unscaled, reduction = 'msphate', group.by = 'msphate_subclusters_lvl4', pt.size = 1) +
+DimPlot(bcn_ms_unscaled, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1) +
+FeaturePlot(bcn_ms_unscaled, reduction = 'msphate', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine = FALSE) + coord_cartesian(xlim = c(-0.015, 0.02), ylim = c(-0.015, 0.015))
+```
+
+- Scaled separates cycling cells, unscaled does not
+
+```{r}
+#DimPlot(bcn_ms_unscaled, reduction = 'msphate', group.by = 'msphate_subclusters_lvl3', pt.size = 1) +
+DimPlot(bcn_ms_unscaled, reduction = 'msphate', group.by = 'msphate_subclusters_lvl4', pt.size = 1) +
+DimPlot(bcn_ms_unscaled, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1) +
+FeaturePlot(bcn_ms_unscaled, reduction = 'msphate', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine = FALSE) + coord_cartesian(xlim = c(-0.015, 0.02), ylim = c(-0.015, 0.015))
+```
+
+- Here, subcluster 1 looks good to look into as it's a connector of many other types of cells
+
+```{r}
+DimPlot(bcn_ms, reduction = 'msphate', group.by = 'timepoint2', pt.size = 1)
+```
+- Good plot for time course
+- Will use lvl4 for looking into subclusters, instead of zooming into subclusters
+
+#### tSNE
+
+```{r}
+DimPlot(bcn_ms_unscaled, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) +
+DimPlot(bcn_ms, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) + 
+coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.02, 0.025)) +
+FeaturePlot(bcn_ms_unscaled, reduction = 'tsne', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE) +
+FeaturePlot(bcn_ms, reduction = 'tsne', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE)
+```
+
+- Scaling still pulls out cycling cells
+- Still a poor plot to split by timepoint
+
+#### UMAP
+
+```{r}
+DimPlot(bcn_ms_unscaled, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) +
+DimPlot(bcn_ms, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) + 
+coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.02, 0.025)) +
+FeaturePlot(bcn_ms_unscaled, reduction = 'umap', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE) +
+FeaturePlot(bcn_ms, reduction = 'umap', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE)
+```
+
+- Still no difference (like scaled always), still good for time course, cycling N separated into two- Why?
+
+```{r}
+DimPlot(bcn_ms_unscaled, reduction = 'umap', group.by = 'timepoint2', pt.size = 1)
+DimPlot(bcn_ms_unscaled, reduction = 'umap', group.by = 'msphate_subclusters_lvl4', pt.size = 1)
+```
+
+- Subclusters 1 and 10: 10 was budding off to chromaffins on an earlier plot (WAS IT??), 1 is still interesting because it's on the neuroblast trajectory but something makes it separate (PC plot might show? Marker genes?)
+- Same conclusions for cycling, time course

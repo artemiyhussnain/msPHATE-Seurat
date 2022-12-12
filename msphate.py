@@ -8,7 +8,7 @@ wdir = '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat'
 npca = 20 # Deafault value for RunPCA in Seurat
 gran = 0.1
 vis_level = 0 # Always zero so points on embedding correspond to individual cells
-clus_level = 4
+clus_level = 3
 
 wdir = os.path.expanduser(wdir)
 gene_path = os.path.join(wdir, 'gene_names.txt')
