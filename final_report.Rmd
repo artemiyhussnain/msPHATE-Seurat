@@ -1,0 +1,243 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+## 1. Top 2k most variable genes vs all genes
+```{r}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(Matrix)
+library(ggplot2)
+library(tibble)
+library(cowplot)
+library(purrr)
+wdir <- '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
+
+data_name <- 'adrenal_medulla_Seurat.RDS.gz'
+med <- readRDS(paste(wdir, data_name, sep = ''))
+```
+
+```{r}
+top_varfeats_global <- head(VariableFeatures(med), 10)
+LabelPoints(VariableFeaturePlot(med), points = top_varfeats_global, repel = TRUE)
+```
+
+Now we'll cluster based only on expression of the most variable genes (initial seurat object unchanged, embedding and cluster identity are metadata belonging to cells, and every gene is still measured in every cell, so subsetting by genes still keeps all cells). These are the same genes used in the Jansky analysis.
+
+```{python}
+### EXAMPLE ###
+### Use msphate.py ###
+def msphate(clustering_level):
+  import multiscale_phate as mp
+  import numpy as np
+  import pandas as pd
+  import scprep
+  import os
+  
+  wdir = '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat'
+  npca = 20 # Deafault value for RunPCA in Seurat
+  gran = 0.1
+  vis_level = 0 # Always zero so points on embedding correspond to individual cells
+  
+  wdir = os.path.expanduser(wdir)
+  gene_path = os.path.join(wdir, 'gene_names.txt')
+  cell_path = os.path.join(wdir, 'cell_names.txt')
+  clus_level = clustering_level
+  
+  print('Loading scaled data...')
+  data_path = os.path.join(wdir, 'counts.csv')
+  data = scprep.io.load_csv(data_path, cell_axis='column',
+                            gene_names=gene_path,
+                            cell_names=cell_path)
+  
+  mp_op = mp.Multiscale_PHATE(n_pca=npca, granularity=gran, random_state=0)
+  levels = mp_op.fit(data)
+  
+  print('Generating embedding and assigning clusters...')
+  embedding, clusters, sizes = mp_op.transform(visualization_level = levels[vis_level],
+                                                               cluster_level = levels[-1*clus_level])
+  
+  print('Exporting embedding and clusters...')
+  msPHATE_embedding = pd.DataFrame(embedding,
+                          index = pd.read_csv(cell_path, header=None).iloc[:, 0].to_list())
+  msPHATE_embedding.to_csv('msPHATE_embedding.csv', header=False)
+  msPHATE_clusters = pd.DataFrame(clusters)
+  msPHATE_clusters.to_csv('msPHATE_clusters.csv', header=False, index=False)
+  
+  print('\n')
+  print(data)
+  print('\n')
+  print(levels)
+  print('\n')
+  print(embedding)
+  print('\n')
+  print(set(clusters))
+  print('\n')
+  print('Clustering level ' + str(clus_level))
+  print('Done')
+```
+
+### Top 2k genes
+```{r}
+GetAssayData(med, 'scale.data') %>% as.data.frame() %>% rownames_to_column(var='genes') %>% filter(genes %in% VariableFeatures(med)) %>% column_to_rownames(var="genes") -> scale_data_2k # Needs pivoting to be filtered by dplyr
+FALSE %in% (rownames(GetAssayData(med, 'scale.data')) %in% VariableFeatures(med)) # Any difference between varfeats and scale.data?
+FALSE %in% (rownames(scale_data_2k) %in% rownames(GetAssayData(med, 'scale.data'))) # Any difference between 'extracting' top 2k genes from scale.data and scale.data itself?
+# No to both
+# Means scale.data is already for top 2k genes
+```
+
+```{r}
+write.table(GetAssayData(med, 'scale.data'), file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(GetAssayData(med, 'scale.data')), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(GetAssayData(med, 'scale.data')), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+# Files written are run through msPHATE in Python
+```
+
+```{python}
+msphate(3)
+```
+
+```{r}
+msPHATE_embedding_global <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding_global <- as.matrix(msPHATE_embedding_global)
+med[['msphate_2k']] <- CreateDimReducObject(embeddings = msPHATE_embedding_global, key = 'msPHATE_')
+# Only run once - embedding constant for different clustering levels
+```
+
+```{r}
+msPHATE_clusters_global <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters_global <- factor(msPHATE_clusters_global)
+med$msphate_clusters_lvl3_2k <- msPHATE_clusters_global
+```
+
+```{python}
+msphate(4)
+```
+
+```{r}
+msPHATE_clusters_global <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters_global <- factor(msPHATE_clusters_global)
+med$msphate_clusters_lvl4_2k <- msPHATE_clusters_global
+```
+
+```{python}
+msphate(5)
+```
+
+```{r}
+msPHATE_clusters_global <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters_global <- factor(msPHATE_clusters_global)
+med$msphate_clusters_lvl5_2k <- msPHATE_clusters_global
+```
+
+```{python}
+msphate(2)
+```
+
+```{r}
+msPHATE_clusters_global <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters_global <- factor(msPHATE_clusters_global)
+med$msphate_clusters_lvl2_2k <- msPHATE_clusters_global
+```
+
+### All genes
+```{r}
+med_all <- med
+med_all <- NormalizeData(med_all)
+med_all <- ScaleData(object = med_all, features = rownames(med_all@assays$RNA@counts))
+Misc(med, 'scale.data_all') <- GetAssayData(med_all, 'scale.data')
+med@misc$scale.data_all[1:5, 1:5]
+rm(med_all)
+
+write.table(med@misc$scale.data_all, file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(med@misc$scale.data_all), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(med@misc$scale.data_all), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+```
+
+```{python}
+msphate(3)
+```
+
+```{r}
+msPHATE_embedding_global <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding_global <- as.matrix(msPHATE_embedding_global)
+med[['msphate_all']] <- CreateDimReducObject(embeddings = msPHATE_embedding_global, key = 'msPHATE_')
+```
+
+```{r}
+msPHATE_clusters_global <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters_global <- factor(msPHATE_clusters_global)
+med$msphate_clusters_lvl3_all <- msPHATE_clusters_global
+```
+
+```{python}
+msphate(4)
+```
+
+```{r}
+msPHATE_clusters_global <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters_global <- factor(msPHATE_clusters_global)
+med$msphate_clusters_lvl4_all <- msPHATE_clusters_global
+```
+
+```{python}
+msphate(5)
+```
+
+```{r}
+msPHATE_clusters_global <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters_global <- factor(msPHATE_clusters_global)
+med$msphate_clusters_lvl5_all <- msPHATE_clusters_global
+```
+
+```{python}
+msphate(2)
+```
+
+```{r}
+msPHATE_clusters_global <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters_global <- factor(msPHATE_clusters_global)
+med$msphate_clusters_lvl2_all <- msPHATE_clusters_global
+```
+
+Let's visualise the clustering and see how using the top 2k most variable genes vs all the genes affects msPHATE clustering compared to UMAP
+
+```{r}
+umap_tsne_all <- med
+med$jansky_idents <- Idents(med)
+all_genes <- rownames(GetAssayData(umap_tsne_all, 'scale.data'))
+umap_tsne_all <- ScaleData(umap_tsne_all, features = all_genes)
+umap_tsne_all <- RunPCA(object = umap_tsne_all, features = all_genes)
+umap_tsne_all <- FindNeighbors(object = umap_tsne_all)
+umap_tsne_all <- FindClusters(object = umap_tsne_all, resolution = 1.2)
+umap_tsne_all <- RunUMAP(object = umap_tsne_all, features = all_genes)
+umap_tsne_all <- RunTSNE(object = umap_tsne_all, features = all_genes)
+med <- RunTSNE(object = med, features = VariableFeatures(med))
+
+med[['umap_all']] <- CreateDimReducObject(embeddings = Embeddings(umap_tsne_all[['umap']]), key = 'UMAP_')
+med[['tsne_all']] <- CreateDimReducObject(embeddings = Embeddings(umap_tsne_all[['tsne']]), key = 'UMAP_')
+rm(umap_tsne_all)
+```
+
+```{r}
+DimPlot(med, reduction = 'msphate_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_2k by jansky_idents')
+DimPlot(med, reduction = 'msphate_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_all by jansky_idents')
+
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl2_2k', pt.size = 1) + ggtitle('msphate_2k at lvl2')
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl3_2k', pt.size = 1) + ggtitle('msphate_2k at lvl3')
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl4_2k', pt.size = 1) + ggtitle('msphate_2k at lvl4')
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl5_2k', pt.size = 1) + ggtitle('msphate_2k at lvl5')
+
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl2_all', pt.size = 1) + ggtitle('msphate_all at lvl2')
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl3_all', pt.size = 1) + ggtitle('msphate_all at lvl3')
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl4_all', pt.size = 1) + ggtitle('msphate_all at lvl4')
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl5_all', pt.size = 1) + ggtitle('msphate_all at lvl5')
+
+DimPlot(med, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_2k by jansky_idents')
+DimPlot(med, reduction = 'umap_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_all by jansky_idents')
+
+DimPlot(med, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_2k by jansky_idents')
+DimPlot(med, reduction = 'tsne_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_all by jansky_idents')
+```
