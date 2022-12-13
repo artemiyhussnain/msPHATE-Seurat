@@ -241,3 +241,73 @@ DimPlot(med, reduction = 'umap_all', group.by = 'jansky_idents', pt.size = 1) + 
 DimPlot(med, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_2k by jansky_idents')
 DimPlot(med, reduction = 'tsne_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_all by jansky_idents')
 ```
+
+```{r}
+saveRDS(med, file = paste(wdir, 'med_final.RDS', sep = ''))
+```
+
+
+## 2. Scaling vs not scaling
+
+```{r}
+med_unscaled <- med
+med_unscaled <- NormalizeData(med_unscaled)
+med_unscaled <- ScaleData(med_unscaled, do.scale = FALSE)
+Misc(med, 'scale.data_unscaled') <- GetAssayData(med_unscaled, 'scale.data')
+med@misc$scale.data_unscaled[1:5, 1:5]
+rm(med_unscaled)
+```
+
+```{r}
+write.table(med@misc$scale.data_unscaled, file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(med@misc$scale.data_unscaled), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(med@misc$scale.data_unscaled), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+```
+
+```{r}
+msPHATE_embedding_global <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding_global <- as.matrix(msPHATE_embedding_global)
+med[['msphate']] <- CreateDimReducObject(embeddings = msPHATE_embedding_global, key = 'msPHATE_')
+# Only run once - embedding constant for different clustering levels
+```
+
+```{r}
+msPHATE_clusters_global <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters_global <- factor(msPHATE_clusters_global)
+med$msphate_clusters_lvl3_unscaled <- msPHATE_clusters_global
+```
+
+```{r}
+msPHATE_clusters_global <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters_global <- factor(msPHATE_clusters_global)
+med$msphate_clusters_lvl4_unscaled <- msPHATE_clusters_global
+```
+
+
+```{r}
+### Fix this to be like part 1
+scale_check <- ScaleData(scale_check, do.scale = FALSE)
+scale_check <- RunPCA(object = scale_check)
+scale_check <- FindNeighbors(object = scale_check)
+scale_check <- FindClusters(object = scale_check, resolution = 1.2)
+scale_check <- RunUMAP(object = scale_check, features = VariableFeatures(scale_check))
+scale_check <- RunTSNE(object = scale_check, features = VariableFeatures(scale_check))
+med <- RunTSNE(object = med, features = VariableFeatures(med))
+```
+
+```{r}
+DimPlot(scale_check, reduction = 'msphate', group.by = 'msphate_clusters_lvl3', pt.size = 1) +
+DimPlot(scale_check, reduction = 'msphate', group.by = 'msphate_clusters_lvl4', pt.size = 1) +
+DimPlot(scale_check, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1)
+
+DimPlot(scale_check, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) +
+DimPlot(med, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1)
+
+DimPlot(scale_check, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) +
+DimPlot(med, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1)
+
+DimPlot(scale_check, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1) +
+DimPlot(med, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1)
+
+#saveRDS(scale_check, file = paste(wdir, 'med_msphate_lvls34_unscaled_2k.RDS'))
+```
