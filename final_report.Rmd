@@ -3,6 +3,16 @@ title: "R Notebook"
 output: html_notebook
 ---
 
+```{r}
+## RESTART ##
+data_name <- 'med_final.RDS'
+med <- readRDS(paste(wdir, data_name, sep = ''))
+data_name <- 'bcn_final.RDS'
+bcn <- readRDS(paste(wdir, data_name, sep = ''))
+data_name <- 'bcn_ms_final.RDS'
+bcn_ms <- readRDS(paste(wdir, data_name, sep = ''))
+```
+
 ## 1. Top 2k most variable genes vs all genes
 ```{r}
 library(dplyr)
@@ -26,57 +36,64 @@ LabelPoints(VariableFeaturePlot(med), points = top_varfeats_global, repel = TRUE
 
 Now we'll cluster based only on expression of the most variable genes (initial seurat object unchanged, embedding and cluster identity are metadata belonging to cells, and every gene is still measured in every cell, so subsetting by genes still keeps all cells). These are the same genes used in the Jansky analysis.
 
+Python code runs well in R, but faster to run msphate.py externally
+
 ```{python}
-### EXAMPLE ###
-### Use msphate.py ###
+### USAGE ###
+# Export counts.csv. gene_names.txt and cell.names.txt from R
+# Run this script (F5)
+# Shell restarts, files loaded in, msPHATE tree constructed
+# Now you can run msPHATE on the same data multiple times at different clustering levels
+# Have to restart again to change other parameters as they are hard-coded at the moment
+# To use newly written data, run the script again (shell restarts), then msphate(clustering_level)
+### USAGE ###
+
+import multiscale_phate as mp
+import numpy as np
+import pandas as pd
+import scprep
+import os
+
+wdir = '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat'
+npca = 20 # Deafault value for RunPCA in Seurat
+gran = 0.1
+vis_level = 0 # Always zero so points on embedding correspond to individual cells
+
+wdir = os.path.expanduser(wdir)
+gene_path = os.path.join(wdir, 'gene_names.txt')
+cell_path = os.path.join(wdir, 'cell_names.txt')
+
+print('Loading scaled data...')
+data_path = os.path.join(wdir, 'counts.csv')
+data = scprep.io.load_csv(data_path, cell_axis='column',
+                        gene_names=gene_path,
+                        cell_names=cell_path)
+
+mp_op = mp.Multiscale_PHATE(n_pca=npca, granularity=gran, random_state=0)
+levels = mp_op.fit(data)
+
 def msphate(clustering_level):
-  import multiscale_phate as mp
-  import numpy as np
-  import pandas as pd
-  import scprep
-  import os
-  
-  wdir = '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat'
-  npca = 20 # Deafault value for RunPCA in Seurat
-  gran = 0.1
-  vis_level = 0 # Always zero so points on embedding correspond to individual cells
-  
-  wdir = os.path.expanduser(wdir)
-  gene_path = os.path.join(wdir, 'gene_names.txt')
-  cell_path = os.path.join(wdir, 'cell_names.txt')
-  clus_level = clustering_level
-  
-  print('Loading scaled data...')
-  data_path = os.path.join(wdir, 'counts.csv')
-  data = scprep.io.load_csv(data_path, cell_axis='column',
-                            gene_names=gene_path,
-                            cell_names=cell_path)
-  
-  mp_op = mp.Multiscale_PHATE(n_pca=npca, granularity=gran, random_state=0)
-  levels = mp_op.fit(data)
-  
-  print('Generating embedding and assigning clusters...')
-  embedding, clusters, sizes = mp_op.transform(visualization_level = levels[vis_level],
+    clus_level = clustering_level
+    print('Generating embedding and assigning clusters...')
+    embedding, clusters, sizes = mp_op.transform(visualization_level = levels[vis_level],
                                                                cluster_level = levels[-1*clus_level])
-  
-  print('Exporting embedding and clusters...')
-  msPHATE_embedding = pd.DataFrame(embedding,
+
+    print('Exporting embedding and clusters...')
+    msPHATE_embedding = pd.DataFrame(embedding,
                           index = pd.read_csv(cell_path, header=None).iloc[:, 0].to_list())
-  msPHATE_embedding.to_csv('msPHATE_embedding.csv', header=False)
-  msPHATE_clusters = pd.DataFrame(clusters)
-  msPHATE_clusters.to_csv('msPHATE_clusters.csv', header=False, index=False)
-  
-  print('\n')
-  print(data)
-  print('\n')
-  print(levels)
-  print('\n')
-  print(embedding)
-  print('\n')
-  print(set(clusters))
-  print('\n')
-  print('Clustering level ' + str(clus_level))
-  print('Done')
+    msPHATE_embedding.to_csv('msPHATE_embedding.csv', header=False)
+    msPHATE_clusters = pd.DataFrame(clusters)
+    msPHATE_clusters.to_csv('msPHATE_clusters.csv', header=False, index=False)
+
+    print('\n')
+    print(data)
+    print('\n')
+    print(levels)
+    print('\n')
+    print(embedding)
+    print('\n')
+    print(set(clusters))
+    print('Done')
 ```
 
 ### Top 2k genes
@@ -97,6 +114,7 @@ write.table(rownames(GetAssayData(med, 'scale.data')), file = paste(wdir, 'gene_
 
 ```{python}
 msphate(3)
+# Use msphate.py
 ```
 
 ```{r}
@@ -114,6 +132,7 @@ med$msphate_clusters_lvl3_2k <- msPHATE_clusters_global
 
 ```{python}
 msphate(4)
+# Use msphate.py
 ```
 
 ```{r}
@@ -124,6 +143,7 @@ med$msphate_clusters_lvl4_2k <- msPHATE_clusters_global
 
 ```{python}
 msphate(5)
+# Use msphate.py
 ```
 
 ```{r}
@@ -134,6 +154,7 @@ med$msphate_clusters_lvl5_2k <- msPHATE_clusters_global
 
 ```{python}
 msphate(2)
+# Use msphate.py
 ```
 
 ```{r}
@@ -158,6 +179,7 @@ write.table(rownames(med@misc$scale.data_all), file = paste(wdir, 'gene_names.tx
 
 ```{python}
 msphate(3)
+# Use msphate.py
 ```
 
 ```{r}
@@ -174,6 +196,7 @@ med$msphate_clusters_lvl3_all <- msPHATE_clusters_global
 
 ```{python}
 msphate(4)
+# Use msphate.py
 ```
 
 ```{r}
@@ -184,6 +207,7 @@ med$msphate_clusters_lvl4_all <- msPHATE_clusters_global
 
 ```{python}
 msphate(5)
+# Use msphate.py
 ```
 
 ```{r}
@@ -194,6 +218,7 @@ med$msphate_clusters_lvl5_all <- msPHATE_clusters_global
 
 ```{python}
 msphate(2)
+# Use msphate.py
 ```
 
 ```{r}
@@ -205,20 +230,28 @@ med$msphate_clusters_lvl2_all <- msPHATE_clusters_global
 Let's visualise the clustering and see how using the top 2k most variable genes vs all the genes affects msPHATE clustering compared to UMAP
 
 ```{r}
+med[['pca_all']] <- CreateDimReducObject(embeddings = Embeddings(med[['pca']]), key = 'PC_')
+med@reductions$pca <- NULL
+
 umap_tsne_all <- med
 med$jansky_idents <- Idents(med)
 all_genes <- rownames(GetAssayData(umap_tsne_all, 'scale.data'))
 umap_tsne_all <- ScaleData(umap_tsne_all, features = all_genes)
-umap_tsne_all <- RunPCA(object = umap_tsne_all, features = all_genes)
-umap_tsne_all <- FindNeighbors(object = umap_tsne_all)
+umap_tsne_all <- RunPCA(object = umap_tsne_all, features = all_genes, reduction.name = 'pca_all')
+umap_tsne_all <- FindNeighbors(object = umap_tsne_all, reduction = 'pca_all')
 umap_tsne_all <- FindClusters(object = umap_tsne_all, resolution = 1.2)
 umap_tsne_all <- RunUMAP(object = umap_tsne_all, features = all_genes)
 umap_tsne_all <- RunTSNE(object = umap_tsne_all, features = all_genes)
-med <- RunTSNE(object = med, features = VariableFeatures(med))
+med <- RunTSNE(object = med, features = VariableFeatures(med), reduction = 'pca_all')
+rm(umap_tsne_all)
+
+med[['umap_2k']] <- CreateDimReducObject(embeddings = Embeddings(med[['umap']]), key = 'UMAP_')
+med[['tsne_2k']] <- CreateDimReducObject(embeddings = Embeddings(med[['tsne']]), key = 'UMAP_')
+med@reductions$umap <- NULL
+med@reductions$tsne <- NULL
 
 med[['umap_all']] <- CreateDimReducObject(embeddings = Embeddings(umap_tsne_all[['umap']]), key = 'UMAP_')
 med[['tsne_all']] <- CreateDimReducObject(embeddings = Embeddings(umap_tsne_all[['tsne']]), key = 'UMAP_')
-rm(umap_tsne_all)
 ```
 
 ```{r}
@@ -235,15 +268,15 @@ DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl3_all', 
 DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl4_all', pt.size = 1) + ggtitle('msphate_all at lvl4')
 DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl5_all', pt.size = 1) + ggtitle('msphate_all at lvl5')
 
-DimPlot(med, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_2k by jansky_idents')
+DimPlot(med, reduction = 'umap_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_2k by jansky_idents')
+DimPlot(med, reduction = 'umap_2k', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_2k by seurat_clusters')
 DimPlot(med, reduction = 'umap_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_all by jansky_idents')
+DimPlot(med, reduction = 'umap_all', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_2k by seurat_clusters')
 
-DimPlot(med, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_2k by jansky_idents')
+DimPlot(med, reduction = 'tsne_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_2k by jansky_idents')
+DimPlot(med, reduction = 'tsne_2k', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_2k by seurat_clusters')
 DimPlot(med, reduction = 'tsne_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_all by jansky_idents')
-```
-
-```{r}
-saveRDS(med, file = paste(wdir, 'med_final.RDS', sep = ''))
+DimPlot(med, reduction = 'tsne_all', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_all by seurat_clusters')
 ```
 
 
@@ -264,10 +297,16 @@ write.table(colnames(med@misc$scale.data_unscaled), file = paste(wdir, 'cell_nam
 write.table(rownames(med@misc$scale.data_unscaled), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
 ```
 
+```{python}
+msphate(3)
+# Use msphate.py
+```
+
+
 ```{r}
 msPHATE_embedding_global <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
 msPHATE_embedding_global <- as.matrix(msPHATE_embedding_global)
-med[['msphate']] <- CreateDimReducObject(embeddings = msPHATE_embedding_global, key = 'msPHATE_')
+med[['msphate_unscaled']] <- CreateDimReducObject(embeddings = msPHATE_embedding_global, key = 'msPHATE_')
 # Only run once - embedding constant for different clustering levels
 ```
 
@@ -275,6 +314,11 @@ med[['msphate']] <- CreateDimReducObject(embeddings = msPHATE_embedding_global, 
 msPHATE_clusters_global <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
 msPHATE_clusters_global <- factor(msPHATE_clusters_global)
 med$msphate_clusters_lvl3_unscaled <- msPHATE_clusters_global
+```
+
+```{python}
+msphate(4)
+# Use msphate.py
 ```
 
 ```{r}
@@ -285,29 +329,335 @@ med$msphate_clusters_lvl4_unscaled <- msPHATE_clusters_global
 
 
 ```{r}
-### Fix this to be like part 1
-scale_check <- ScaleData(scale_check, do.scale = FALSE)
-scale_check <- RunPCA(object = scale_check)
-scale_check <- FindNeighbors(object = scale_check)
-scale_check <- FindClusters(object = scale_check, resolution = 1.2)
-scale_check <- RunUMAP(object = scale_check, features = VariableFeatures(scale_check))
-scale_check <- RunTSNE(object = scale_check, features = VariableFeatures(scale_check))
-med <- RunTSNE(object = med, features = VariableFeatures(med))
+umap_tsne_unscaled <- med
+umap_tsne_unscaled <- RunPCA(object = umap_tsne_unscaled, reduction.name = 'pca_unscaled')
+umap_tsne_unscaled <- FindNeighbors(object = umap_tsne_unscaled, reduction = 'pca_unscaled')
+umap_tsne_unscaled <- FindClusters(object = umap_tsne_unscaled, resolution = 1.2)
+umap_tsne_unscaled <- RunUMAP(object = umap_tsne_unscaled, features = VariableFeatures(umap_tsne_unscaled))
+umap_tsne_unscaled <- RunTSNE(object = umap_tsne_unscaled, features = VariableFeatures(umap_tsne_unscaled), reduction = 'pca_unscaled')
+
+med[['umap_unscaled']] <- CreateDimReducObject(embeddings = Embeddings(umap_tsne_unscaled[['umap']]), key = 'UMAP_')
+med[['tsne_unscaled']] <- CreateDimReducObject(embeddings = Embeddings(umap_tsne_unscaled[['tsne']]), key = 'UMAP_')
+rm(umap_tsne_unscaled)
 ```
 
 ```{r}
-DimPlot(scale_check, reduction = 'msphate', group.by = 'msphate_clusters_lvl3', pt.size = 1) +
-DimPlot(scale_check, reduction = 'msphate', group.by = 'msphate_clusters_lvl4', pt.size = 1) +
-DimPlot(scale_check, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1)
+DimPlot(med, reduction = 'msphate_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_scaled by jansky_idents')
+DimPlot(med, reduction = 'msphate_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_unscaled by jansky_idents')
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl3_2k', pt.size = 1) + ggtitle('msphate_scaled at lvl3')
+DimPlot(med, reduction = 'msphate_unscaled', group.by = 'msphate_clusters_lvl3_unscaled', pt.size = 1) + ggtitle('msphate_unscaled at lvl3')
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl4_2k', pt.size = 1) + ggtitle('msphate_scaled at lvl4')
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl4_unscaled', pt.size = 1) + ggtitle('msphate_unscaled at lvl4')
 
-DimPlot(scale_check, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) +
-DimPlot(med, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1)
+DimPlot(med, reduction = 'umap_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_scaled by jansky_idents')
+DimPlot(med, reduction = 'umap_2k', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_scaled by seurat_clusters')
+DimPlot(med, reduction = 'umap_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_unscaled by jansky_idents')
+DimPlot(med, reduction = 'umap_unscaled', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_unscaled by seurat_clusters')
 
-DimPlot(scale_check, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) +
-DimPlot(med, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1)
+DimPlot(med, reduction = 'tsne_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_scaled by jansky_idents')
+DimPlot(med, reduction = 'tsne_2k', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_scaled by seurat_clusters')
+DimPlot(med, reduction = 'tsne_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_unscaled by jansky_idents')
+DimPlot(med, reduction = 'tsne_unscaled', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_unscaled by seurat_clusters')
+```
 
-DimPlot(scale_check, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1) +
-DimPlot(med, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1)
+```{r}
+#saveRDS(med, file = paste(wdir, 'med_final.RDS', sep = ''))
+```
 
-#saveRDS(scale_check, file = paste(wdir, 'med_msphate_lvls34_unscaled_2k.RDS'))
+
+## 3. Bbridge, connecting chromaffins, and neuroblasts
+
+### Using jansky_idents
+
+```{r}
+bcn <- subset(med, subset = jansky_idents %in% c('Bridge', 'connecting Chromaffin cells', 'Neuroblasts', 'cycling Neuroblasts', 'late Neuroblasts'))
+bcn <- FindVariableFeatures(bcn)
+bcn <- NormalizeData(bcn)
+bcn <- ScaleData(bcn)
+
+bcn_unscaled <- bcn
+bcn_unscaled <- NormalizeData(bcn_unscaled)
+bcn_unscaled <- ScaleData(bcn_unscaled, do.scale = FALSE)
+Misc(bcn, 'scale.data_unscaled') <- GetAssayData(bcn_unscaled, 'scale.data')
+
+bcn_unscaled <- RunPCA(object = bcn_unscaled)
+bcn_unscaled <- FindNeighbors(object = bcn_unscaled)
+bcn_unscaled <- FindClusters(object = bcn_unscaled, resolution = 1.2)
+bcn_unscaled <- RunUMAP(object = bcn_unscaled, features = VariableFeatures(bcn_unscaled))
+bcn_unscaled <- RunTSNE(object = bcn_unscaled, features = VariableFeatures(bcn_unscaled))
+bcn[['pca_unscaled']] <- CreateDimReducObject(embeddings = Embeddings(bcn_unscaled[['pca']]), key = 'PC_')
+bcn[['umap_unscaled']] <- CreateDimReducObject(embeddings = Embeddings(bcn_unscaled[['umap']]), key = 'UMAP_')
+bcn[['tsne_unscaled']] <- CreateDimReducObject(embeddings = Embeddings(bcn_unscaled[['tsne']]), key = 'UMAP_')
+
+rm(bcn_unscaled)
+```
+
+```{r}
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl2_2k', pt.size = 1)
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl3_2k', pt.size = 1)
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl4_2k', pt.size = 1)
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl5_2k', pt.size = 1)
+DimPlot(med, reduction = 'msphate_2k', group.by = 'jansky_idents', pt.size = 1)
+```
+
+```{r}
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl4_2k', pt.size = 1, label = TRUE) + NoLegend()
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl5_2k', pt.size = 1, label = TRUE) + NoLegend()
+DimPlot(med, reduction = 'msphate_2k', group.by = 'jansky_idents', pt.size = 1, label = TRUE) + NoLegend()
+```
+
+
+```{r}
+# Zooming into 0, 336, 82, 1, 4607, 6, 4829, 3, 5, 2, 1814, 1838 of lvl4
+bcn_ms <- subset(med, subset = msphate_clusters_lvl4_2k %in% c('0', '336', '82', '1', '4607', '6', '4829', '3', '5', '2', '1814', '1838'))
+rm(med)
+bcn_ms <- subset(bcn_ms, subset = jansky_idents %in% c('Bridge', 'connecting Chromaffin cells', 'Neuroblasts', 'cycling Neuroblasts', 'late Neuroblasts'))
+bcn_ms <- FindVariableFeatures(bcn_ms)
+bcn_ms <- NormalizeData(bcn_ms)
+bcn_ms <- ScaleData(bcn_ms)
+
+bcn_ms_unscaled <- bcn_ms
+bcn_ms_unscaled <- NormalizeData(bcn_ms_unscaled)
+bcn_ms_unscaled <- ScaleData(bcn_ms_unscaled, do.scale = FALSE)
+Misc(bcn_ms, 'scale.data_unscaled') <- GetAssayData(bcn_ms_unscaled, 'scale.data')
+
+bcn_ms_unscaled <- RunPCA(object = bcn_ms_unscaled)
+bcn_ms_unscaled <- FindNeighbors(object = bcn_ms_unscaled)
+bcn_ms_unscaled <- FindClusters(object = bcn_ms_unscaled, resolution = 1.2)
+bcn_ms_unscaled <- RunUMAP(object = bcn_ms_unscaled, features = VariableFeatures(bcn_ms_unscaled))
+bcn_ms_unscaled <- RunTSNE(object = bcn_ms_unscaled, features = VariableFeatures(bcn_ms_unscaled))
+bcn_ms[['pca_unscaled']] <- CreateDimReducObject(embeddings = Embeddings(bcn_ms_unscaled[['pca']]), key = 'PC_')
+bcn_ms[['umap_unscaled']] <- CreateDimReducObject(embeddings = Embeddings(bcn_ms_unscaled[['umap']]), key = 'UMAP_')
+bcn_ms[['tsne_unscaled']] <- CreateDimReducObject(embeddings = Embeddings(bcn_ms_unscaled[['tsne']]), key = 'UMAP_')
+
+rm(bcn_ms_unscaled)
+```
+
+```{r}
+write.table(GetAssayData(bcn, 'scale.data'), file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(GetAssayData(bcn, 'scale.data')), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(GetAssayData(bcn, 'scale.data')), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+# Run msPHATE
+```
+
+```{python}
+### RESTART ###
+msphate(4)
+# Use msphate.py
+```
+
+```{r}
+msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding <- as.matrix(msPHATE_embedding)
+bcn[['msphate_scaled']] <- CreateDimReducObject(embeddings = msPHATE_embedding, key = 'msPHATE_')
+```
+
+```{r}
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters_ <- factor(msPHATE_clusters)
+bcn$msphate_subclusters_lvl4_scaled <- msPHATE_clusters
+```
+
+```{r}
+write.table(bcn@misc$scale.data_unscaled, file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(bcn@misc$scale.data_unscaled), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(bcn@misc$scale.data_unscaled), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+# Run msPHATE
+```
+
+```{python}
+### RESTART ###
+msphate(4)
+# Use msphate.py
+```
+
+```{r}
+msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding <- as.matrix(msPHATE_embedding)
+bcn[['msphate_unscaled']] <- CreateDimReducObject(embeddings = msPHATE_embedding, key = 'msPHATE_')
+```
+
+```{r}
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+bcn$msphate_subclusters_lvl4_unscaled <- msPHATE_clusters
+```
+
+```{r}
+bcn <- RunPCA(object = bcn, reduction.name = 'pca_scaled')
+bcn <- FindNeighbors(object = bcn, reduction = 'pca_scaled')
+bcn <- FindClusters(object = bcn, resolution = 1.2)
+bcn <- RunUMAP(object = bcn, features = VariableFeatures(bcn))
+bcn <- RunTSNE(object = bcn, features = VariableFeatures(bcn), reduction = 'pca_scaled')
+```
+
+
+### Using corresponding msPHATE clusters
+
+```{r}
+write.table(GetAssayData(bcn_ms, 'scale.data'), file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(GetAssayData(bcn_ms, 'scale.data')), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(GetAssayData(bcn_ms, 'scale.data')), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+# Run msPHATE
+```
+
+```{python}
+### RESTART ###
+msphate(4)
+# Use msphate.py
+```
+
+```{r}
+msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding <- as.matrix(msPHATE_embedding)
+bcn_ms[['msphate_scaled']] <- CreateDimReducObject(embeddings = msPHATE_embedding, key = 'msPHATE_')
+```
+
+```{r}
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters_ <- factor(msPHATE_clusters)
+bcn_ms$msphate_subclusters_lvl4_scaled <- msPHATE_clusters
+```
+
+```{r}
+write.table(bcn_ms@misc$scale.data_unscaled, file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(bcn_ms@misc$scale.data_unscaled), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(bcn_ms@misc$scale.data_unscaled), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+# Run msPHATE
+```
+
+```{python}
+### RESTART ###
+msphate(4)
+# Use msphate.py
+```
+
+```{r}
+msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding <- as.matrix(msPHATE_embedding)
+bcn_ms[['msphate_unscaled']] <- CreateDimReducObject(embeddings = msPHATE_embedding, key = 'msPHATE_')
+```
+
+```{r}
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+bcn_ms$msphate_subclusters_lvl4_unscaled <- msPHATE_clusters
+```
+
+```{r}
+bcn_ms <- RunPCA(object = bcn_ms, reduction.name = 'pca_scaled')
+bcn_ms <- FindNeighbors(object = bcn_ms, reduction = 'pca_scaled')
+bcn_ms <- FindClusters(object = bcn_ms, resolution = 1.2)
+bcn_ms <- RunUMAP(object = bcn_ms, features = VariableFeatures(bcn_ms))
+bcn_ms <- RunTSNE(object = bcn_ms, features = VariableFeatures(bcn_ms), reduction = 'pca_scaled')
+```
+
+```{r}
+saveRDS(bcn, file = paste(wdir, 'bcn_final.RDS', sep = ''))
+saveRDS(bcn_ms, file = paste(wdir, 'bcn_ms_final.RDS', sep = ''))
+```
+
+```{r}
+DimPlot(bcn, reduction = 'msphate_scaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_scaled by jansky_idents')
+DimPlot(bcn, reduction = 'msphate_scaled', group.by = 'msphate_subclusters_lvl4_scaled', pt.size = 1) + ggtitle('msphate_scaled at lvl4')
+DimPlot(bcn, reduction = 'msphate_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_unscaled by jansky_idents')
+DimPlot(bcn, reduction = 'msphate_unscaled', group.by = 'msphate_subclusters_lvl4_unscaled', pt.size = 1) + ggtitle('msphate_unscaled at lvl4')
+
+## Minor - fix umap and tsne naming in bcn
+## Add label = TRUE? For equal sizing
+DimPlot(bcn, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_scaled by jansky_idents')
+DimPlot(bcn, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_scaled by seurat_clusters')
+DimPlot(bcn, reduction = 'umap_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_unscaled by jansky_idents')
+DimPlot(bcn, reduction = 'umap_unscaled', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_unscaled by seurat_clusters')
+
+DimPlot(bcn, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_scaled by jansky_idents')
+DimPlot(bcn, reduction = 'tsne', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_scaled by seurat_clusters')
+DimPlot(bcn, reduction = 'tsne_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_unscaled by jansky_idents')
+DimPlot(bcn, reduction = 'tsne_unscaled', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_unscaled by seurat_clusters')
+```
+
+```{r}
+DimPlot(bcn_ms, reduction = 'msphate_scaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_scaled by jansky_idents')
+DimPlot(bcn_ms, reduction = 'msphate_scaled', group.by = 'msphate_subclusters_lvl4_scaled', pt.size = 1) + ggtitle('msphate_scaled at lvl4')
+DimPlot(bcn_ms, reduction = 'msphate_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_unscaled by jansky_idents')
+DimPlot(bcn_ms, reduction = 'msphate_unscaled', group.by = 'msphate_subclusters_lvl4_unscaled', pt.size = 1) + ggtitle('msphate_unscaled at lvl4')
+
+## Minor - fix umap and tsne naming in bcn_ms
+DimPlot(bcn_ms, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_scaled by jansky_idents')
+DimPlot(bcn_ms, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_scaled by seurat_clusters')
+DimPlot(bcn_ms, reduction = 'umap_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_unscaled by jansky_idents')
+DimPlot(bcn_ms, reduction = 'umap_unscaled', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_unscaled by seurat_clusters')
+
+DimPlot(bcn_ms, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_scaled by jansky_idents')
+DimPlot(bcn_ms, reduction = 'tsne', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_scaled by seurat_clusters')
+DimPlot(bcn_ms, reduction = 'tsne_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_unscaled by jansky_idents')
+DimPlot(bcn_ms, reduction = 'tsne_unscaled', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_unscaled by seurat_clusters')
+```
+
+
+```{r}
+## Work out if these are useful to keep in final pipeline
+DimPlot(bcn, reduction = 'msphate', group.by = 'msphate_subclusters_lvl4', pt.size = 1) +
+  DimPlot(bcn, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1) +
+  FeaturePlot(bcn, reduction = 'msphate', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE) + coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.012, 0.016))
+
+DimPlot(bcn_unscaled, reduction = 'msphate', group.by = 'msphate_subclusters_lvl4', pt.size = 1) +
+  DimPlot(bcn_unscaled, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1) +
+  FeaturePlot(bcn_unscaled, reduction = 'msphate', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine = FALSE) + coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.012, 0.016))
+
+DimPlot(bcn_unscaled, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) +
+  DimPlot(bcn, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) + 
+  coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.02, 0.025)) +
+  FeaturePlot(bcn, reduction = 'umap', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE) +
+  FeaturePlot(bcn_unscaled, reduction = 'umap', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE)
+
+DimPlot(bcn_unscaled, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) +
+  DimPlot(bcn, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) + 
+  coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.02, 0.025)) +
+  FeaturePlot(bcn, reduction = 'tsne', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE) + 
+  FeaturePlot(bcn_unscaled, reduction = 'tsne', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE)
+
+DimPlot(bcn_unscaled, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) +
+DimPlot(bcn_unscaled, reduction = 'tsne', group.by = 'seurat_clusters', pt.size = 1) + 
+DimPlot(bcn, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) +
+DimPlot(bcn, reduction = 'tsne', group.by = 'seurat_clusters', pt.size = 1)
+
+DimPlot(bcn_unscaled, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) +
+DimPlot(bcn_unscaled, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1) +
+DimPlot(bcn, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) +
+DimPlot(bcn, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1)
+```
+
+```{r}
+#DimPlot(bcn_ms, reduction = 'msphate', group.by = 'msphate_subclusters_lvl3', pt.size = 1) +
+DimPlot(bcn_ms, reduction = 'msphate', group.by = 'msphate_subclusters_lvl4', pt.size = 1) +
+DimPlot(bcn_ms, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1) +
+FeaturePlot(bcn_ms, reduction = 'msphate', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE) + coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.015, 0.02))
+
+#DimPlot(bcn_ms_unscaled, reduction = 'msphate', group.by = 'msphate_subclusters_lvl3', pt.size = 1) +
+DimPlot(bcn_ms_unscaled, reduction = 'msphate', group.by = 'msphate_subclusters_lvl4', pt.size = 1) +
+DimPlot(bcn_ms_unscaled, reduction = 'msphate', group.by = 'jansky_idents', pt.size = 1) +
+FeaturePlot(bcn_ms_unscaled, reduction = 'msphate', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine = FALSE) + coord_cartesian(xlim = c(-0.015, 0.02), ylim = c(-0.015, 0.015))
+
+DimPlot(bcn_ms_unscaled, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) +
+DimPlot(bcn_ms, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) + 
+coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.02, 0.025)) +
+FeaturePlot(bcn_ms, reduction = 'umap', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE) +
+FeaturePlot(bcn_ms_unscaled, reduction = 'umap', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE)
+
+DimPlot(bcn_ms_unscaled, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) +
+DimPlot(bcn_ms, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) + 
+coord_cartesian(xlim = c(-0.02, 0.02), ylim = c(-0.02, 0.025)) +
+FeaturePlot(bcn_ms, reduction = 'tsne', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE) + 
+FeaturePlot(bcn_ms_unscaled, reduction = 'tsne', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=FALSE)
+
+DimPlot(bcn_ms_unscaled, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) +
+DimPlot(bcn_ms_unscaled, reduction = 'tsne', group.by = 'seurat_clusters', pt.size = 1) + 
+DimPlot(bcn_ms, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) +
+DimPlot(bcn_ms, reduction = 'tsne', group.by = 'seurat_clusters', pt.size = 1)
+
+DimPlot(bcn_ms_unscaled, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) +
+DimPlot(bcn_ms_unscaled, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1) +
+DimPlot(bcn_ms, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) +
+DimPlot(bcn_ms, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1)
 ```

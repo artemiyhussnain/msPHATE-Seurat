@@ -1,3 +1,12 @@
+### USAGE ###
+# Export counts.csv. gene_names.txt and cell.names.txt from R
+# Run this script (F5)
+# Shell restarts, files loaded in, msPHATE tree constructed
+# Now you can run msPHATE on the same data multiple times at different clustering levels
+# Have to restart again to change other parameters as they are hard-coded at the moment
+# To use newly written data, run the script again (shell restarts), then msphate(clustering_level)
+### USAGE ###
+
 import multiscale_phate as mp
 import numpy as np
 import pandas as pd
@@ -43,4 +52,7 @@ def msphate(clustering_level):
     print(embedding)
     print('\n')
     print(set(clusters))
+    print ('\n')
+    print(' Clustering level ' + str(clus_level))
+    print('\n')
     print('Done')
