@@ -1,0 +1,208 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(Matrix)
+library(ggplot2)
+library(tibble)
+library(cowplot)
+library(purrr)
+library(SeuratDisk)
+wdir <- '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
+data_name <- 'Jansky_Adameyko_integrated.H5Seurat'
+comb <- LoadH5Seurat(file = paste(wdir, data_name, sep = ''))
+```
+
+```{r}
+## No NormalizeData or FindVariableFeatures according to integration vignette by Seurat: https://satijalab.org/seurat/articles/integration_introduction.html
+comb <- ScaleData(object = comb)
+comb <- RunPCA(object = comb, reduction.name = 'pca_scaled') # Shunya used npcs = 30 and resolution = 0.5
+comb <- FindNeighbors(object = comb, reduction = 'pca_scaled')
+comb <- FindClusters(object = comb)
+comb <- RunTSNE(object = comb, features = VariableFeatures(comb), reduction = 'pca_scaled')
+comb <- RunUMAP(object = comb, features = VariableFeatures(comb))
+
+comb_unscaled <- comb
+comb_unscaled <- ScaleData(comb_unscaled, do.scale = FALSE)
+Misc(comb, 'scale.data_unscaled') <- GetAssayData(comb_unscaled, 'scale.data')
+
+comb_unscaled <- RunPCA(object = comb_unscaled, reduction.name = 'pca_unscaled')
+comb_unscaled <- FindNeighbors(object = comb_unscaled, reduction = 'pca_unscaled')
+comb_unscaled <- FindClusters(object = comb_unscaled, resolution = 1.2)
+comb_unscaled <- RunUMAP(object = comb_unscaled, features = VariableFeatures(comb_unscaled))
+comb_unscaled <- RunTSNE(object = comb_unscaled, features = VariableFeatures(comb_unscaled), reduction = 'pca_unscaled')
+
+comb[['umap_unscaled']] <- CreateDimReducObject(embeddings = Embeddings(comb_unscaled[['umap']]), key = 'UMAP_')
+comb[['umap_scaled']] <- CreateDimReducObject(embeddings = Embeddings(comb[['umap']]), key = 'UMAP_')
+comb[['umap']] <- NULL
+comb[['tsne_unscaled']] <- CreateDimReducObject(embeddings = Embeddings(comb_unscaled[['tsne']]), key = 'UMAP_')
+comb[['tsne_scaled']] <- CreateDimReducObject(embeddings = Embeddings(comb[['tsne']]), key = 'UMAP_')
+comb[['tsne']] <- NULL
+rm(comb_unscaled)
+```
+
+
+```{r}
+write.table(GetAssayData(comb, 'scale.data'), file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(GetAssayData(comb, 'scale.data')), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(GetAssayData(comb, 'scale.data')), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+# Files written are run through msPHATE in Python
+```
+
+```{r}
+msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding <- as.matrix(msPHATE_embedding)
+comb[['msphate_scaled']] <- CreateDimReducObject(embeddings = msPHATE_embedding, key = 'msPHATE_')
+```
+
+```{r}
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+comb$msphate_clusters_lvl4_scaled <- msPHATE_clusters
+```
+
+
+```{r}
+write.table(comb@misc$scale.data_unscaled, file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(comb@misc$scale.data_unscaled), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(comb@misc$scale.data_unscaled), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+# Files written are run through msPHATE in Python
+```
+
+```{r}
+msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding <- as.matrix(msPHATE_embedding)
+comb[['msphate_unscaled']] <- CreateDimReducObject(embeddings = msPHATE_embedding, key = 'msPHATE_')
+```
+
+```{r}
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+comb$msphate_clusters_lvl4_unscaled <- msPHATE_clusters
+```
+
+```{r}
+DimPlot(comb, reduction = 'umap_scaled', group.by = 'fate', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('umap_scaled by fate')
+DimPlot(comb, reduction = 'umap_unscaled', group.by = 'fate', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('umap_unscaled by fate')
+DimPlot(comb, reduction = 'umap_unscaled', group.by = 'seurat_clusters', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('umap_unscaled by fate')
+
+DimPlot(comb, reduction = 'tsne_scaled', group.by = 'fate', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('tsne_scaled by fate')
+DimPlot(comb, reduction = 'tsne_unscaled', group.by = 'fate', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('tsne_unscaled by fate')
+DimPlot(comb, reduction = 'msphate_scaled', group.by = 'fate', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('msphate_scaled by fate')
+DimPlot(comb, reduction = 'msphate_unscaled', group.by = 'fate', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('msphate_unscaled by fate')
+
+DimPlot(comb, reduction = 'msphate_scaled', group.by = 'msphate_clusters_lvl4_scaled', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('msphate_scaled by fate')
+DimPlot(comb, reduction = 'msphate_unscaled', group.by = 'msphate_clusters_lvl4_unscaled', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('msphate_unscaled by fate')
+```
+
+```{r}
+SaveH5Seurat(comb, overwrite = TRUE)
+```
+
+What is with scaled clusters 11116, 11096 etc? Get rid of them, recluster
+
+
+
+```{r}
+comb <- subset(comb, subset = msphate_clusters_lvl4_scaled %in% c('0', '1', '27', '2717', '2863'))
+```
+
+```{r}
+## No NormalizeData or FindVariableFeatures according to integration vignette by Seurat: https://satijalab.org/seurat/articles/integration_introduction.html
+comb <- ScaleData(object = comb)
+comb <- RunPCA(object = comb, reduction.name = 'pca_scaled') # Shunya used npcs = 30 and resolution = 0.5
+comb <- FindNeighbors(object = comb, reduction = 'pca_scaled')
+comb <- FindClusters(object = comb)
+comb <- RunTSNE(object = comb, features = VariableFeatures(comb), reduction = 'pca_scaled')
+comb <- RunUMAP(object = comb, features = VariableFeatures(comb))
+
+comb_unscaled <- comb
+comb_unscaled <- ScaleData(comb_unscaled, do.scale = FALSE)
+Misc(comb, 'scale.data_unscaled') <- GetAssayData(comb_unscaled, 'scale.data')
+
+comb_unscaled <- RunPCA(object = comb_unscaled, reduction.name = 'pca_unscaled')
+comb_unscaled <- FindNeighbors(object = comb_unscaled, reduction = 'pca_unscaled')
+comb_unscaled <- FindClusters(object = comb_unscaled, resolution = 1.2)
+comb_unscaled <- RunUMAP(object = comb_unscaled, features = VariableFeatures(comb_unscaled))
+comb_unscaled <- RunTSNE(object = comb_unscaled, features = VariableFeatures(comb_unscaled), reduction = 'pca_unscaled')
+
+comb[['umap_unscaled']] <- CreateDimReducObject(embeddings = Embeddings(comb_unscaled[['umap']]), key = 'UMAP_')
+comb[['umap_scaled']] <- CreateDimReducObject(embeddings = Embeddings(comb[['umap']]), key = 'UMAP_')
+comb[['umap']] <- NULL
+comb[['tsne_unscaled']] <- CreateDimReducObject(embeddings = Embeddings(comb_unscaled[['tsne']]), key = 'UMAP_')
+comb[['tsne_scaled']] <- CreateDimReducObject(embeddings = Embeddings(comb[['tsne']]), key = 'UMAP_')
+comb[['tsne']] <- NULL
+rm(comb_unscaled)
+```
+
+```{r}
+write.table(GetAssayData(comb, 'scale.data'), file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(GetAssayData(comb, 'scale.data')), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(GetAssayData(comb, 'scale.data')), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+# Files written are run through msPHATE in Python
+```
+
+### HERE NOW ###
+Python was restarting after msphate(n) unexplainably
+
+```{r}
+msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding <- as.matrix(msPHATE_embedding)
+comb[['msphate_scaled']] <- CreateDimReducObject(embeddings = msPHATE_embedding, key = 'msPHATE_')
+```
+
+```{r}
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+comb$msphate_clusters_lvl4_scaled <- msPHATE_clusters
+```
+
+```{r}
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+comb$msphate_clusters_lvl5_scaled <- msPHATE_clusters
+```
+
+```{r}
+write.table(comb@misc$scale.data_unscaled, file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(comb@misc$scale.data_unscaled), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(comb@misc$scale.data_unscaled), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+# Files written are run through msPHATE in Python
+```
+
+```{r}
+msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding <- as.matrix(msPHATE_embedding)
+comb[['msphate_unscaled']] <- CreateDimReducObject(embeddings = msPHATE_embedding, key = 'msPHATE_')
+```
+
+```{r}
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+comb$msphate_clusters_lvl4_unscaled <- msPHATE_clusters
+```
+
+```{r}
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+comb$msphate_clusters_lvl5_scaled <- msPHATE_clusters
+```
+
+```{r}
+DimPlot(comb, reduction = 'umap_scaled', group.by = 'fate', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('umap_scaled by fate')
+DimPlot(comb, reduction = 'umap_unscaled', group.by = 'fate', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('umap_unscaled by fate')
+DimPlot(comb, reduction = 'umap_unscaled', group.by = 'seurat_clusters', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('umap_unscaled by fate')
+
+DimPlot(comb, reduction = 'tsne_scaled', group.by = 'fate', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('tsne_scaled by fate')
+DimPlot(comb, reduction = 'tsne_unscaled', group.by = 'fate', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('tsne_unscaled by fate')
+DimPlot(comb, reduction = 'msphate_scaled', group.by = 'fate', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('msphate_scaled by fate')
+DimPlot(comb, reduction = 'msphate_unscaled', group.by = 'fate', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('msphate_unscaled by fate')
+
+DimPlot(comb, reduction = 'msphate_scaled', group.by = 'msphate_clusters_lvl4_scaled', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('msphate_scaled by fate')
+DimPlot(comb, reduction = 'msphate_unscaled', group.by = 'msphate_clusters_lvl4_unscaled', pt.size = 1.5, label = TRUE, repel = TRUE) + ggtitle('msphate_unscaled by fate')
+```

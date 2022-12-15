@@ -1,0 +1,114 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+## RESTART ##
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(Matrix)
+library(ggplot2)
+library(tibble)
+library(cowplot)
+library(purrr)
+wdir <- '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
+data_name <- 'med_final.RDS'
+med <- readRDS(paste(wdir, data_name, sep = ''))
+data_name <- 'bcn_final.RDS'
+bcn <- readRDS(paste(wdir, data_name, sep = ''))
+data_name <- 'bcn_ms_final.RDS'
+bcn_ms <- readRDS(paste(wdir, data_name, sep = ''))
+```
+
+## 2k vs all
+```{r}
+DimPlot(med, reduction = 'msphate_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_2k by jansky_idents')
+DimPlot(med, reduction = 'msphate_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_all by jansky_idents')
+
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl2_2k', pt.size = 1) + ggtitle('msphate_2k at lvl2')
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl3_2k', pt.size = 1) + ggtitle('msphate_2k at lvl3')
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl4_2k', pt.size = 1) + ggtitle('msphate_2k at lvl4')
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl5_2k', pt.size = 1) + ggtitle('msphate_2k at lvl5')
+
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl2_all', pt.size = 1) + ggtitle('msphate_all at lvl2')
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl3_all', pt.size = 1) + ggtitle('msphate_all at lvl3')
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl4_all', pt.size = 1) + ggtitle('msphate_all at lvl4')
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl5_all', pt.size = 1) + ggtitle('msphate_all at lvl5')
+
+DimPlot(med, reduction = 'umap_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_2k by jansky_idents')
+DimPlot(med, reduction = 'umap_2k', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_2k by seurat_clusters')
+DimPlot(med, reduction = 'umap_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_all by jansky_idents')
+DimPlot(med, reduction = 'umap_all', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_2k by seurat_clusters')
+
+DimPlot(med, reduction = 'tsne_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_2k by jansky_idents')
+DimPlot(med, reduction = 'tsne_2k', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_2k by seurat_clusters')
+DimPlot(med, reduction = 'tsne_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_all by jansky_idents')
+DimPlot(med, reduction = 'tsne_all', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_all by seurat_clusters')
+```
+
+## Scaled vs unscaled
+```{r}
+DimPlot(med, reduction = 'msphate_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_scaled by jansky_idents')
+DimPlot(med, reduction = 'msphate_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_unscaled by jansky_idents')
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl3_2k', pt.size = 1) + ggtitle('msphate_scaled at lvl3')
+DimPlot(med, reduction = 'msphate_unscaled', group.by = 'msphate_clusters_lvl3_unscaled', pt.size = 1) + ggtitle('msphate_unscaled at lvl3')
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl4_2k', pt.size = 1) + ggtitle('msphate_scaled at lvl4')
+DimPlot(med, reduction = 'msphate_unscaled', group.by = 'msphate_clusters_lvl4_unscaled', pt.size = 1) + ggtitle('msphate_unscaled at lvl4')
+
+DimPlot(med, reduction = 'umap_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_scaled by jansky_idents')
+DimPlot(med, reduction = 'umap_2k', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_scaled by seurat_clusters')
+DimPlot(med, reduction = 'umap_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_unscaled by jansky_idents')
+DimPlot(med, reduction = 'umap_unscaled', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_unscaled by seurat_clusters')
+
+DimPlot(med, reduction = 'tsne_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_scaled by jansky_idents')
+DimPlot(med, reduction = 'tsne_2k', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_scaled by seurat_clusters')
+DimPlot(med, reduction = 'tsne_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_unscaled by jansky_idents')
+DimPlot(med, reduction = 'tsne_unscaled', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_unscaled by seurat_clusters')
+```
+
+## BCN jansky_idents zoom
+```{r}
+DimPlot(bcn, reduction = 'msphate_scaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_scaled by jansky_idents')
+DimPlot(bcn, reduction = 'msphate_scaled', group.by = 'msphate_subclusters_lvl4_scaled', pt.size = 1) + ggtitle('msphate_scaled at lvl4')
+DimPlot(bcn, reduction = 'msphate_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_unscaled by jansky_idents')
+DimPlot(bcn, reduction = 'msphate_unscaled', group.by = 'msphate_subclusters_lvl4_unscaled', pt.size = 1) + ggtitle('msphate_unscaled at lvl4')
+
+## Minor - fix umap and tsne naming in bcn
+## Add label = TRUE? For equal sizing
+DimPlot(bcn, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_scaled by jansky_idents')
+DimPlot(bcn, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_scaled by seurat_clusters')
+DimPlot(bcn, reduction = 'umap_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_unscaled by jansky_idents')
+DimPlot(bcn, reduction = 'umap_unscaled', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_unscaled by seurat_clusters')
+
+DimPlot(bcn, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_scaled by jansky_idents')
+DimPlot(bcn, reduction = 'tsne', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_scaled by seurat_clusters')
+DimPlot(bcn, reduction = 'tsne_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_unscaled by jansky_idents')
+DimPlot(bcn, reduction = 'tsne_unscaled', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_unscaled by seurat_clusters')
+```
+
+### BCN msPHATE zoom
+```{r}
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl4_2k', pt.size = 1, label = TRUE) + NoLegend()
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl5_2k', pt.size = 1, label = TRUE) + NoLegend()
+DimPlot(med, reduction = 'msphate_2k', group.by = 'jansky_idents', pt.size = 1, label = TRUE) + NoLegend()
+```
+
+```{r}
+DimPlot(bcn_ms, reduction = 'msphate_scaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_scaled by jansky_idents')
+DimPlot(bcn_ms, reduction = 'msphate_scaled', group.by = 'msphate_subclusters_lvl4_scaled', pt.size = 1) + ggtitle('msphate_scaled at lvl4')
+DimPlot(bcn_ms, reduction = 'msphate_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_unscaled by jansky_idents')
+DimPlot(bcn_ms, reduction = 'msphate_unscaled', group.by = 'msphate_subclusters_lvl4_unscaled', pt.size = 1) + ggtitle('msphate_unscaled at lvl4')
+
+## Minor - fix umap and tsne naming in bcn_ms
+DimPlot(bcn_ms, reduction = 'umap', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_scaled by jansky_idents')
+DimPlot(bcn_ms, reduction = 'umap', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_scaled by seurat_clusters')
+DimPlot(bcn_ms, reduction = 'umap_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_unscaled by jansky_idents')
+DimPlot(bcn_ms, reduction = 'umap_unscaled', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_unscaled by seurat_clusters')
+
+DimPlot(bcn_ms, reduction = 'tsne', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_scaled by jansky_idents')
+DimPlot(bcn_ms, reduction = 'tsne', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_scaled by seurat_clusters')
+DimPlot(bcn_ms, reduction = 'tsne_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_unscaled by jansky_idents')
+DimPlot(bcn_ms, reduction = 'tsne_unscaled', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_unscaled by seurat_clusters')
+```
