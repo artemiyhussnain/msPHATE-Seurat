@@ -22,13 +22,59 @@ data_name <- 'bcn_ms_final.RDS'
 bcn_ms <- readRDS(paste(wdir, data_name, sep = ''))
 ```
 
+## Presentation
+```{r}
+VlnPlot(med, features = c('nFeature_RNA')) + NoLegend()
+VlnPlot(med, features = c('percent.mt')) + NoLegend()
+
+DimPlot(med, reduction = 'umap_2k', group.by = 'jansky_idents', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_2k by jansky_idents') + NoLegend()
+DimPlot(med, reduction = 'umap_2k', group.by = 'timepoint2', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_2k by timepoint')
+
+head(med@reductions$pca_2k@cell.embeddings)
+DimPlot(med, reduction = 'pca_2k', dims = c(1, 2), group.by = 'jansky_idents', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_2k by jansky_idents') + NoLegend()
+
+DimPlot(med, reduction = 'umap_2k', group.by = 'seurat_clusters', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('umap_2k by seurat_clusters') + NoLegend()
+FeaturePlot(med, reduction = 'umap_2k', features = 'SOX10', pt.size = 1) + ggtitle('umap_2k SOX10 expression') + NoLegend()
+DimPlot(med, reduction = 'umap_2k', group.by = 'jansky_idents', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('umap_2k by jansky_idents') + NoLegend()
+
+DimPlot(med, reduction = 'tsne_2k', group.by = 'seurat_clusters', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('tsne_2k by seurat_clusters') + NoLegend()
+FeaturePlot(med, reduction = 'tsne_2k', features = 'SOX10', pt.size = 1) + ggtitle('tsne_2k SOX10 expression') + NoLegend()
+DimPlot(med, reduction = 'tsne_2k', group.by = 'jansky_idents', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('tsne_2k by jansky_idents') + NoLegend()
+
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl3_2k', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_2k at lvl3') + NoLegend()
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl4_2k', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_2k at lvl4') + NoLegend()
+FeaturePlot(med, reduction = 'msphate_2k', features = 'SOX10', pt.size = 1) + coord_cartesian(xlim = c(-0.011, 0.02), ylim = c(-0.011, 0.015)) + ggtitle('msphate_2k SOX10 expression') + NoLegend()
+DimPlot(med, reduction = 'msphate_2k', group.by = 'jansky_idents', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_2k by jansky_idents') + NoLegend()
+
+top_varfeats_global <- head(VariableFeatures(med), 10)
+LabelPoints(VariableFeaturePlot(med), points = top_varfeats_global, repel = TRUE)
+
+DimPlot(med, reduction = 'msphate_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_2k by jansky_idents')
+DimPlot(med, reduction = 'umap_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_2k by jansky_idents')
+DimPlot(med, reduction = 'tsne_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_2k by jansky_idents')
+DimPlot(med, reduction = 'msphate_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_all by jansky_idents')
+DimPlot(med, reduction = 'umap_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_all by jansky_idents')
+DimPlot(med, reduction = 'tsne_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_all by jansky_idents')
+
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl2_2k', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_2k at lvl2') + NoLegend()
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl3_2k', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_2k at lvl3') + NoLegend()
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl4_2k', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_2k at lvl4') + NoLegend()
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl5_2k', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_2k at lvl5') + NoLegend()
+DimPlot(med, reduction = 'msphate_2k', group.by = 'jansky_idents', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_2k by jansky_idents') + NoLegend()
+
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl2_all', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_all at lvl2') + NoLegend()
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl3_all', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_all at lvl3') + NoLegend()
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl4_all', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_all at lvl4') + NoLegend()
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl5_all', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_all at lvl5') + NoLegend()
+DimPlot(med, reduction = 'msphate_all', group.by = 'jansky_idents', pt.size = 1, label = TRUE, repel = TRUE) + ggtitle('msphate_all by jansky_idents') + NoLegend()
+```
+
 ## 2k vs all
 ```{r}
 DimPlot(med, reduction = 'msphate_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_2k by jansky_idents')
 DimPlot(med, reduction = 'msphate_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_all by jansky_idents')
 
 DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl2_2k', pt.size = 1) + ggtitle('msphate_2k at lvl2')
-DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl3_2k', pt.size = 1) + ggtitle('msphate_2k at lvl3')
 DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl4_2k', pt.size = 1) + ggtitle('msphate_2k at lvl4')
 DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl5_2k', pt.size = 1) + ggtitle('msphate_2k at lvl5')
 
