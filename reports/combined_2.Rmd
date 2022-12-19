@@ -1,0 +1,111 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+### RESTART ###
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(Matrix)
+library(ggplot2)
+library(tibble)
+library(cowplot)
+library(purrr)
+library(SeuratDisk)
+library(RColorBrewer)
+wdir <- '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
+data_name <- 'SeuratProject.h5Seurat'
+comb <- LoadH5Seurat(file = paste(wdir, data_name, sep = ''))
+```
+
+```{r}
+HoverLocator(DimPlot(comb, reduction = 'umap_scaled', group.by = 'fate'), information = FetchData(comb, vars = 'fate'))
+Idents(comb) <- comb$fate
+DimPlot(comb, reduction = 'umap_scaled')
+head(Idents(comb))
+comb <- RenameIdents(comb, 'Bridge' = 'Bridge', 'connecting Chromaffin cells' = 'Chromaffins', 'late Chromaffin cells' = 'Chromaffins', 'Chromaffin cells' = 'Chromaffins', 'chromaffin' = 'Chromaffins', 'Neuroblasts' = 'Neuroblasts', 'late Neuroblasts' = 'Neuroblasts', 'cycling Neuroblasts' = 'Neuroblasts', 'sympathoblasts' = 'Neuroblasts', 'SCPs' = 'SCPs', 'cycling SCPs' = 'SCPs', 'late SCPs' = 'SCPs', 'SCP' = 'SCPs')
+comb$merge_idents <- Idents(comb)
+DimPlot(comb, reduction = 'msphate_scaled', group.by = 'msphate_clusters_lvl4_scaled')
+comb <- subset(comb, subset = msphate_clusters_lvl4_scaled %in% (c('0', '1', '27', '2717', '2863')))
+DimPlot(comb, reduction = 'msphate_scaled', group.by = 'msphate_clusters_lvl4_scaled')
+```
+
+```{r}
+write.table(GetAssayData(comb, 'scale.data'), file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(GetAssayData(comb, 'scale.data')), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(GetAssayData(comb, 'scale.data')), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+# Files written are run through msPHATE in Python
+```
+
+```{r}
+msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding <- as.matrix(msPHATE_embedding)
+comb[['msphate_scaled']] <- CreateDimReducObject(embeddings = msPHATE_embedding, key = 'msPHATE_')
+```
+
+```{r}
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+comb$msphate_clusters_lvl4_scaled <- msPHATE_clusters
+```
+
+```{r}
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+comb$msphate_clusters_lvl5_scaled <- msPHATE_clusters
+```
+
+```{r}
+DimPlot(comb, reduction = 'msphate_scaled', group.by = 'msphate_clusters_lvl4_scaled')
+DimPlot(comb, reduction = 'msphate_scaled', group.by = 'msphate_clusters_lvl5_scaled')
+DimPlot(comb, reduction = 'msphate_scaled', group.by = 'merge_idents')
+```
+
+```{r}
+timepoint_cols <- brewer.pal(8, 'GnBu')
+DimPlot(comb, reduction = 'msphate_scaled', split.by = 'dataset', cols = timepoint_cols, group.by = 'timepoint2')
+DimPlot(comb, reduction = 'msphate_scaled', group.by = 'merge_idents')
+HoverLocator(DimPlot(comb, reduction = 'msphate_scaled', group.by = 'msphate_clusters_lvl5_scaled'), information = FetchData(comb, vars = 'msphate_clusters_lvl5_scaled'))
+Idents(comb) <- comb$msphate_clusters_lvl5_scaled
+comb <- RenameIdents(comb, '0' = 'ealy SCPs', '10' = 'ealy SCPs', '335' = 'late SCPs', '3948' = 'late SCPs', '4091' = 'late SCPs', '82' = 'Bridge', '1' = 'connecting + late Chromaffins', '2736' = 'connecting + late Chromaffins', '22' = 'early Chromaffins', '1303' = 'early Chromaffins', '5472' = 'early Chromaffins', '2' = 'Neuroblasts', '3' = 'Neuroblasts', '5' = 'Neuroblasts', '6' = 'Neuroblasts', '8225' = 'Neuroblasts', '506' = 'Uncertain', '1942' = 'Uncertain', '2107' = 'Uncertain', '6827' = 'Uncertain', '8332' = 'Uncertain')
+DimPlot(comb, reduction = 'msphate_scaled')
+comb$merge_idents_finer <- Idents(comb)
+```
+
+
+```{r}
+comb_bcn <- subset(comb, subset = merge_idents_finer %in% c('Bridge', 'connecting + late Chromaffins', 'Neuroblasts'))
+```
+
+```{r}
+write.table(GetAssayData(comb_bcn, 'scale.data'), file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(GetAssayData(comb_bcn, 'scale.data')), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(GetAssayData(comb_bcn, 'scale.data')), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+# Files written are run through msPHATE in Python
+```
+
+```{r}
+msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding <- as.matrix(msPHATE_embedding)
+comb_bcn[['msphate_scaled']] <- CreateDimReducObject(embeddings = msPHATE_embedding, key = 'msPHATE_')
+```
+
+```{r}
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+comb_bcn$msphate_subclusters_lvl4_scaled <- msPHATE_clusters
+```
+
+```{r}
+msPHATE_clusters <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters <- factor(msPHATE_clusters)
+comb_bcn$msphate_subclusters_lvl3_scaled <- msPHATE_clusters
+```
+
+```{r}
+DimPlot(comb_bcn, reduction = 'msphate_scaled', group.by = 'msphate_clusters_lvl4_scaled')
+DimPlot(comb_bcn, reduction = 'msphate_scaled', group.by = 'msphate_subclusters_lvl3_scaled')
+```
+

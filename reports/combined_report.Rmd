@@ -148,7 +148,7 @@ write.table(rownames(GetAssayData(comb, 'scale.data')), file = paste(wdir, 'gene
 ```
 
 ### HERE NOW ###
-Python was restarting after msphate(n) unexplainably
+Python restarting after msphate(4) unexplainably
 
 ```{r}
 msPHATE_embedding <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
