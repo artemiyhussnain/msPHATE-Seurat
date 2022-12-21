@@ -270,7 +270,7 @@ DimPlot(clus0_2_fix_2k, reduction = 'msphate', split.by = 'timepoint2', group.by
 ```
 
 Need somebody to check my thinking
-Next, I found that it's possible to essentially FeaturePlot PCs driving cluters
+Next, I found that it's possible to essentially FeaturePlot PCs driving clusters
 
 ```{r clus0_2_fix_2k PCs}
 pc1 <- FeaturePlot(clus0_2_fix_2k, features = "PC_1", reduction = 'msphate') + coord_cartesian(xlim = c(-0.025, 0.065), ylim = c(-0.035, 0.035))

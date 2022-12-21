@@ -6,7 +6,7 @@ output:
   html_notebook: default
   pdf_document: default
 ---
-```{r, results='hide'}
+```{r, echo=FALSE}
 library(dplyr)
 library(Seurat)
 library(patchwork)
@@ -286,6 +286,13 @@ FeaturePlot(med, reduction = 'umap_2k', features = 'CC.Difference', cols = c('re
 FeaturePlot(med, reduction = 'umap_unscaled', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=TRUE) + ggtitle('umap_unscaled by cell cycle')
 ```
 
+### tSNE section
+```{r}
+DimPlot(med, reduction = 'tsne_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_scaled by jansky_idents')
+DimPlot(med, reduction = 'tsne_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_unscaled by jansky_idents')
+```
+
+## Zooming into BCN
 
 
 ## Miscellaneous ideas
