@@ -158,3 +158,47 @@ DimPlot(bcn_ms, reduction = 'tsne', group.by = 'seurat_clusters', pt.size = 1) +
 DimPlot(bcn_ms, reduction = 'tsne_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_unscaled by jansky_idents')
 DimPlot(bcn_ms, reduction = 'tsne_unscaled', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('tsne_unscaled by seurat_clusters')
 ```
+
+## More on scaling
+```{r}
+top_varfeats_global <- head(VariableFeatures(med), 100)
+bottom_varfeats_global <- tail(VariableFeatures(med), 100)
+
+top_scaled <- med@assays$RNA@scale.data[rownames(med@assays$RNA@scale.data) %in% top_varfeats_global, ]
+bottom_scaled <- med@assays$RNA@scale.data[rownames(med@assays$RNA@scale.data) %in% bottom_varfeats_global, ]
+
+top_unscaled <- med@misc$scale.data_unscaled[rownames(med@misc$scale.data_unscaled) %in% top_varfeats_global, ]
+bottom_unscaled <- med@misc$scale.data_unscaled[rownames(med@misc$scale.data_unscaled) %in% bottom_varfeats_global, ]
+
+hist(top_scaled[1, ])
+hist(top_scaled[2, ])
+hist(top_scaled[3, ])
+hist(top_scaled[4, ])
+hist(top_scaled[5, ])
+
+hist(top_unscaled[1, ])
+hist(top_unscaled[2, ])
+hist(top_unscaled[3, ])
+hist(top_unscaled[4, ])
+hist(top_unscaled[5, ])
+
+hist(bottom_scaled[1, ])
+hist(bottom_scaled[2, ])
+hist(bottom_scaled[3, ])
+hist(bottom_scaled[4, ])
+hist(bottom_scaled[5, ])
+
+hist(bottom_unscaled[1, ])
+hist(bottom_unscaled[2, ])
+hist(bottom_unscaled[3, ])
+hist(bottom_unscaled[4, ])
+hist(bottom_unscaled[5, ])
+
+sd(top_unscaled) - sd(top_scaled)
+sd(bottom_unscaled) - sd(bottom_scaled)
+
+top_sdchange <- c(sd(top_unscaled[1, ]) - sd(top_scaled[1, ]), sd(top_unscaled[2, ]) - sd(top_scaled[2, ]), sd(top_unscaled[3, ]) - sd(top_scaled[3, ]), sd(top_unscaled[4, ]) - sd(top_scaled[4, ]), sd(top_unscaled[5, ]) - sd(top_scaled[5, ]))
+bottom_sdchange <- c(sd(bottom_unscaled[1, ]) - sd(bottom_scaled[1, ]), sd(bottom_unscaled[2, ]) - sd(bottom_scaled[2, ]), sd(bottom_unscaled[3, ]) - sd(bottom_scaled[3, ]), sd(bottom_unscaled[4, ]) - sd(bottom_scaled[4, ]), sd(bottom_unscaled[5, ]) - sd(bottom_scaled[5, ]))
+top_sdchange
+bottom_sdchange
+```

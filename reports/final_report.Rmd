@@ -34,7 +34,7 @@ library(cowplot)
 library(purrr)
 wdir <- '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
 
-data_name <- 'adrenal_medulla_Seurat.RDS.gz'
+data_name <- 'seurat/adrenal_medulla_Seurat.RDS.gz'
 med <- readRDS(paste(wdir, data_name, sep = ''))
 ```
 

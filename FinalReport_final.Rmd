@@ -1,0 +1,304 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+```{r, results='hide'}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(Matrix)
+library(ggplot2)
+library(tibble)
+library(cowplot)
+library(purrr)
+library(SeuratDisk)
+library(RColorBrewer)
+```
+
+## Background
+scRNA-seq "data" poses a philosophical challenge to science. To even begin to understand it, we have to use dimensionality reduction methods, which inherently makes them very difficult to compare - "ground truth" in this case is the incomprehensible pile of data that is the counts matrix. 
+
+I looked into the data from [Jansky et al.](https://www.nature.com/articles/s41588-021-00806-1). They scRNA-sequenced the developing adrenal gland from human embryos, and I used only the adrenal medulla subset of that data, as that is the site of interesting biology for neuroblastoma. 
+
+The basic premise is that neuroblasts fail to progress to their final differentiation state (stopping at different points on their trajectory for different patients). They arise from bridge cells (themselves from migrating neural crest cells). The trajectory is as follows: bridge into Schwann Cell Precursors (SCPs) and connecting chromaffins, connecting chromaffins into mature chromaffins and neuroblasts.
+
+I compared a newly written dimensionality reduction method, multiscale PHATE, to UMAP, PCA, and tSNE. The latter three are built into Seurat, but the former has to be run in a separate Python script (it can also be run inside an R notebook such as this, but I found that to be slower). Briefly, msPHATE first turns the data into a transition probability matrix, performs a random walk using that matrix, finds the informational distance between resulting points, and plots that as the dimensionality reduced embedding (this is the PHATE component). Then, the data is progressively smoothed, magnifying any pre-existing density heterogeneity and generating natural groupings at multiple scales, resulting in a 3D "tree" that starts with very fine points at its base (individual cells) and ends with coarser natural groupings at the top. The multiple "salient levels of resolution" that one can slice the tree at are also used to break up the embedding into different numbers of clusters, which is what we are interested in for finding cell types within our data. 
+
+![An msPHATE tree](~/Jansky/ms_phate/msphate_jansky/timepoint_phateplot_old/tree.png)
+
+Another great thing about msPHATE is that the clusters it generates (at any coarseness) can be zoomed into (called "re-embedding" in the literature). I only used the finest coarseness (i.e., each point on the embedding corresponds to a single cell) because all metadata in the Seurat object needs to be for individual cells, but the zooming in capability was very useful. The end point of this project was zooming into the bridge - connecting chromaffin - neuroblast axis in the hope that sequences of a future neuroblastoma cell line experiment at CCB will map at different points on the same trajectory.
+
+Please refer to the msPHATE [GitHub page](https://github.com/KrishnaswamyLab/Multiscale_PHATE) and [article](https://www.nature.com/articles/s41587-021-01186-x) for more details, validation, and pretty pictures. I like this method because it can be used on just about any data and seems to have fewer compromises than UMAP.
+
+This is the code I used to run msPHATE.
+```
+### USAGE ###
+# Export counts.csv. gene_names.txt and cell.names.txt from R
+# Now you can load in data by running this script (careful, this restarts the shell!)
+# Find msPHATE clusters at different levels with clus
+### USAGE ###
+
+import multiscale_phate as mp
+import numpy as np
+import pandas as pd
+import scprep
+import os
+
+wdir = '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat'
+npca = 20 # Default number for analyses in R
+gran = 0.1 # Default msPHATE parameter
+
+wdir = os.path.expanduser(wdir)
+gene_path = os.path.join(wdir, 'gene_names.txt')
+cell_path = os.path.join(wdir, 'cell_names.txt')
+
+print('Loading scaled data...')
+data_path = os.path.join(wdir, 'counts.csv')
+data = scprep.io.load_csv(data_path, cell_axis='column',
+                        gene_names=gene_path,
+                        cell_names=cell_path)
+
+mp_op = mp.Multiscale_PHATE(n_pca=npca, granularity=gran, random_state=0)
+levels = mp_op.fit(data)
+
+def clus(clustering_level, vis_level = 0):
+    clus_level = clustering_level
+    print('Generating embedding and assigning clusters...')
+    embedding, clusters, sizes = mp_op.transform(visualization_level = levels[vis_level],
+                                                               cluster_level = levels[-1*clus_level])
+
+    print('Exporting embedding and clusters...')
+    msPHATE_embedding = pd.DataFrame(embedding,
+                          index = pd.read_csv(cell_path, header=None).iloc[:, 0].to_list())
+    msPHATE_embedding.to_csv('msPHATE_embedding.csv', header=False)
+    msPHATE_clusters = pd.DataFrame(clusters)
+    msPHATE_clusters.to_csv('msPHATE_clusters.csv', header=False, index=False)
+
+    print('\n')
+    print(data)
+    print('\n')
+    print(levels)
+    print('\n')
+    print(embedding)
+    print('\n')
+    print(set(clusters))
+    print ('\n')
+    print(' Clustering level ' + str(clus_level))
+    print('\n')
+    print('Done')
+```
+
+This code is to load in previously made objects without rerunning intensive analyses.
+```{r}
+## RESTART ##
+wdir <- '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
+
+data_name <- 'seurats/med_final.RDS'
+med <- readRDS(paste(wdir, data_name, sep = ''))
+```
+
+```
+data_name <- 'seurats/bcn_final.RDS'
+bcn <- readRDS(paste(wdir, data_name, sep = ''))
+
+data_name <- 'seurats/bcn_ms_final.RDS'
+bcn_ms <- readRDS(paste(wdir, data_name, sep = ''))
+
+data_name <- 'seurats/SeuratProject.h5Seurat'
+comb <- LoadH5Seurat(file = paste(wdir, data_name, sep = ''))
+```
+
+
+## Feature selection: top 2k most variable genes vs all genes
+### Running the analyses
+Jansky et al. used the top 2000 most variable genes for dimensionality reduction, standard procedure in scRNA-seq analyses. What would happen if we used all genes instead?
+
+```{r, echo=FALSE}
+top_varfeats_global <- head(VariableFeatures(med), 10)
+LabelPoints(VariableFeaturePlot(med), points = top_varfeats_global, repel = TRUE)
+```
+
+The top 2000 genes are already stored as scale.data in the Seurat file provided by Jansky et al. This is the code to export the data from R and import msPHATE outputs into the Seurat object.
+
+```
+write.table(GetAssayData(med, 'scale.data'), file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(GetAssayData(med, 'scale.data')), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(GetAssayData(med, 'scale.data')), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+# Files written are run through msPHATE in Python
+```
+
+At this point, I run msphate.py and clus(3)
+
+```
+msPHATE_embedding_global <- read.csv(paste(wdir, 'msPHATE_embedding.csv', sep = ''), header=FALSE, row.names = 1, col.names = c('', 'msPHATE_1', 'msPHATE_2'))
+msPHATE_embedding_global <- as.matrix(msPHATE_embedding_global)
+med[['msphate_2k']] <- CreateDimReducObject(embeddings = msPHATE_embedding_global, key = 'msPHATE_')
+# Only run once - embedding constant for different clustering levels
+```
+
+```
+msPHATE_clusters_global <- as.matrix(read.csv(paste(wdir, 'msPHATE_clusters.csv', sep = ''), header=FALSE))
+msPHATE_clusters_global <- factor(msPHATE_clusters_global)
+med$msphate_clusters_lvl3_2k <- msPHATE_clusters_global
+# Repeat clus(n) and this last step to store clusters at different levels in the Seurat object
+```
+
+This is the code to export scaled data for all genes. The additional table is generated in a copy of the Seurat object (later deleted to save space). This is then stored in the misc slot of the original Seurat object. 
+```
+med_all <- med
+med_all <- NormalizeData(med_all)
+med_all <- ScaleData(object = med_all, features = rownames(med_all@assays$RNA@counts))
+Misc(med, 'scale.data_all') <- GetAssayData(med_all, 'scale.data')
+rm(med_all)
+
+write.table(med@misc$scale.data_all, file = paste(wdir, 'counts.csv', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(colnames(med@misc$scale.data_all), file = paste(wdir, 'cell_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+write.table(rownames(med@misc$scale.data_all), file = paste(wdir, 'gene_names.txt', sep = ''), sep = ',', row.names = FALSE, col.names = FALSE)
+```
+
+The msPHATE analysis is done on data for all genes as before, and this is the code for UMAP and tSNE on the same data, again by using a temporary copy of the Seurat object.
+```
+med[['pca_all']] <- CreateDimReducObject(embeddings = Embeddings(med[['pca']]), key = 'PC_')
+med@reductions$pca <- NULL
+
+umap_tsne_all <- med
+med$jansky_idents <- Idents(med)
+all_genes <- rownames(GetAssayData(umap_tsne_all, 'scale.data'))
+umap_tsne_all <- ScaleData(umap_tsne_all, features = all_genes)
+umap_tsne_all <- RunPCA(object = umap_tsne_all, features = all_genes, reduction.name = 'pca_all')
+umap_tsne_all <- FindNeighbors(object = umap_tsne_all, reduction = 'pca_all')
+umap_tsne_all <- FindClusters(object = umap_tsne_all, resolution = 1.2)
+umap_tsne_all <- RunUMAP(object = umap_tsne_all, features = all_genes)
+umap_tsne_all <- RunTSNE(object = umap_tsne_all, features = all_genes)
+med <- RunTSNE(object = med, features = VariableFeatures(med), reduction = 'pca_all')
+rm(umap_tsne_all)
+
+med[['umap_2k']] <- CreateDimReducObject(embeddings = Embeddings(med[['umap']]), key = 'UMAP_')
+med[['tsne_2k']] <- CreateDimReducObject(embeddings = Embeddings(med[['tsne']]), key = 'UMAP_')
+med@reductions$umap <- NULL
+med@reductions$tsne <- NULL
+
+med[['umap_all']] <- CreateDimReducObject(embeddings = Embeddings(umap_tsne_all[['umap']]), key = 'UMAP_')
+med[['tsne_all']] <- CreateDimReducObject(embeddings = Embeddings(umap_tsne_all[['tsne']]), key = 'UMAP_')
+```
+
+Let's see the results! To set our bearings straight, here are the UMAP and msPHATE embeddings of the same data coloured by final identities assigned by Jansky et al. (stored as jansky_idents in the metadata).
+```{r}
+DimPlot(med, reduction = 'msphate_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_2k by jansky_idents')
+DimPlot(med, reduction = 'umap_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_2k by jansky_idents')
+```
+
+Immediately, we can see that UMAP is still better for communicating the basic differentiation trajectory: bridge cells go into SCPs or connecting chromaffins, the latter differentiating into neuroblasts or mature chromaffins. 
+
+The topology is the same in the msPHATE embedding, but the trajectory is presented as much less linear, with a huge tangle of cells at the bridge-neuroblast-chromaffin junction.
+
+### msPHATE clustering levels
+Let's see how msPHATE broke up this data into clusters.
+```{r, echo=FALSE}
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl2_2k', pt.size = 1) + ggtitle('msphate_2k at lvl2')
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl3_2k', pt.size = 1) + ggtitle('msphate_2k at lvl3')
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl4_2k', pt.size = 1) + ggtitle('msphate_2k at lvl4')
+DimPlot(med, reduction = 'msphate_2k', group.by = 'msphate_clusters_lvl5_2k', pt.size = 1) + ggtitle('msphate_2k at lvl5')
+```
+
+What I notice about this is that some clusters are very stable with increasing clustering level. This could be measured quantitatively by calculating the msPHATE cluster composition of jansky_idents and its stability at different levels. However, just by eye (and for lack of time...) I can see that late SCPs, bridge + connecting chromaffins, and neuroblasts proper are the most stable as msPHATE clusters. 
+
+### Effect of feature selection
+Now that we have our bearings, let's actually look at the effect of feature selection.
+```{r, echo=FALSE}
+DimPlot(med, reduction = 'msphate_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_2k by jansky_idents')
+DimPlot(med, reduction = 'msphate_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_all by jansky_idents')
+DimPlot(med, reduction = 'umap_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_2k by jansky_idents')
+DimPlot(med, reduction = 'umap_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_all by jansky_idents')
+```
+
+The UMAP plot preserves overall topology very well, even though now the entire embedding is much noisier and more diffuse. To be precise, I would have had to redo the annotation by comparing cell type marker expression for this embedding, but the originally assigned identities are close enough and provide a visual aid to trace how the position of cells changes in different embeddings. 
+
+The msPHATE is completely different. Perhaps the algorithm assigns more weight to the non-variable genes than UMAP, and this shows in the embedding? Let's see if msPHATE clusters in this case still correspond well to jansky_idents in this case.
+```{r, echo=FALSE}
+DimPlot(med, reduction = 'msphate_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_all by jansky_idents')
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl2_all', pt.size = 1) + ggtitle('msphate_all at lvl2')
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl3_all', pt.size = 1) + ggtitle('msphate_all at lvl3')
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl4_all', pt.size = 1) + ggtitle('msphate_all at lvl4')
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl5_all', pt.size = 1) + ggtitle('msphate_all at lvl5')
+```
+
+The first thing we see is that there is not the dramatic jump in number of clusters with increasing clustering level that we saw for top 2000 variable genes. I interpret this as the top 2000 gene data containing more information, and hence msPHATE uncovering a lot more clusters than for the more homogeneous all gene data. The abstract signal-to-noise ratio is lower in this case. However, is it right to call it noise? Perhaps we are seeing the high-level structure of the data which may or may not correspond to the clusters based on most variable genes. 
+
+What is this "high-level structure"? I can see that neuroblasts and SCPs proper are stably lumped with bridge and proper + connecting chromaffins. The other clusters have no clear pattern. Again, these clusters may or may not be interesting.
+
+Let's quickly check how these clusters compare to msphate_2k clusters.
+```{r}
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl5_all', pt.size = 1) + ggtitle('msphate_all at lvl5')
+DimPlot(med, reduction = 'msphate_all', group.by = 'msphate_clusters_lvl3_2k', pt.size = 1) + ggtitle('msphate_all by msphate_clusters_lvl3_2k') # Note that group.by can be done for any metadata variable, making this the best way of storing cluster identities arising from different methods
+```
+
+Since we found earlier that msphate_2k clusters corresponded well to jansky_idents, they don't correspond well to msphate_all clusters, as expected. 
+
+### Comparing msPHATE clusters and Louvain clusters
+Quick note: there is a lot about UMAP clusters that I didn't test. Firstly, the clusters technically arise from the Louvain algorithm and should be called that instead. Secondly, the resolution parameter can be adjusted to give the same number of clusters as msPHATE to make them comparable, something I couldn't do in the time I had. Here is a taster of what I might have done.
+```{r}
+DimPlot(med, reduction = 'umap_2k', group.by = 'msphate_clusters_lvl4_2k', pt.size = 1) + ggtitle('umap_2k by msphate_clusters_lvl4_2k')
+DimPlot(med, reduction = 'umap_2k', group.by = 'seurat_clusters', pt.size = 1) + ggtitle('umap_2k by seurat_clusters') # Louvain algorithm clusters are stored as metadata variable seurat_clusters and used for both UMAP and tSNE
+DimPlot(med, reduction = 'umap_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_2k by jansky_idents')
+```
+
+Two big differences here. For example, msPHATE incorporates into connecting chromaffins half of what Louvain combines with the bridge population. It also combines into one a lot of the neuroblast clusters that the Louvain algorithm separated. Would Jansky et al. have separated neuroblasts or chromaffins the way they did had they used msPHATE..?
+
+### tSNE section
+Finally, a quick look at tSNE.
+```{r, echo=FALSE}
+DimPlot(med, reduction = 'tsne_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_2k by jansky_idents')
+DimPlot(med, reduction = 'tsne_all', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_all by jansky_idents')
+```
+
+The embedding (shape) doesn't change much. I haven't used tSNE very much in this project, but it can't be neglected since it can be useful for communicating certain things, such as composition without trajectory. In this case, connecting chromaffins are clearly placed in the centre, emphasising them as the junction between bridge, chromaffins, and neuroblasts. 
+
+
+## To scale or not to scale?
+To continue comparing msPHATE and UMAP, we need to use the most variable genes. However, before subsetting the trajectory we are interested in (as a reminder, it's bridge - connecting chromaffins - neuroblasts), there is one more decision to make. As I understand it, scaling means representing the data as number of standard deviations from the mean (z-score) after the data is mean-centred (i.e., the mean is set to zero).
+
+What this means is that for genes with a small variance (i.e., most cells have a similar value for this gene), scaling widens the distribution, increasing the numeric value of each expression measurement for that gene. For high variance genes, the opposite happens - moving a set number of measurements away from the distribution centre would lead to a smaller change in numerical value when scaled. From this, I expect scaling to increase the effect of low-DE genes on the embedding, and decrease that of high-DE genes.
+
+
+### Comparing embeddings with jansky_idents
+As before, the unscaled data is stored in the misc slot of our Seurat object. It is then exported, run through msPHATE at different levels, re-imported, and UMAP rerun on the unscaled data. 
+```{r, echo=FALSE}
+DimPlot(med, reduction = 'msphate_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_scaled by jansky_idents')
+DimPlot(med, reduction = 'msphate_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('msphate_unscaled by jansky_idents')
+DimPlot(med, reduction = 'umap_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_scaled by jansky_idents')
+DimPlot(med, reduction = 'umap_unscaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('umap_unscaled by jansky_idents')
+```
+
+As expected, scaled embeddings are tighter and unscaled embeddings are sparser. Also, scaling seems to separate cells based on lesser differences. This might explain why SCPs and bridge cells are only connected in the scaled UMAP: the difference must be very small, and hence amplified by scaling. 
+
+### Effect on cell cycle
+What is the effect?
+```{r, echo=FALSE}
+FeaturePlot(med, reduction = 'msphate_2k', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=TRUE) + coord_cartesian(xlim = c(-0.01, 0.02), ylim = c(-0.012, 0.016)) + ggtitle('msphate_scaled by cell cycle')
+FeaturePlot(med, reduction = 'msphate_unscaled', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=TRUE) + coord_cartesian(xlim = c(-0.01, 0.02), ylim = c(-0.012, 0.016)) + ggtitle('msphate_unscaled by cell cycle')
+
+FeaturePlot(med, reduction = 'umap_2k', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=TRUE) + ggtitle('umap_scaled by cell cycle')
+FeaturePlot(med, reduction = 'umap_unscaled', features = 'CC.Difference', cols = c('red', 'green'), pt.size = 1.1, combine=TRUE) + ggtitle('umap_unscaled by cell cycle')
+```
+
+
+
+## Miscellaneous ideas
+- Zooming into UMAP clusters
+- Heatmaps of msPHATE clusters
+
+
+## Conclusions and omissions
+### Conclusions
+- Using all genes results in a very noisy embedding compared to using the most variable genes
+
+### Omissions
+- Are Louvain clusters comparable to msPHATE clusters at a comparable resolution (i.e., the same number of clusters)?
+- Do Louvain clusters at a lower resolution correspond to final assigned idents as well as msPHATE clusters "out of the box"?
+- Does "Louvain with multiscale adjustment" fix zooming into UMAP clusters?
+- What features is msPHATE using to make clusters for the all gene data? Is it noise, or are they interesting high-level groupings in the data?
