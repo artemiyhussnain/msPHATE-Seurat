@@ -3,11 +3,12 @@ title: "R Notebook"
 output:
   html_document:
     df_print: paged
-  html_notebook: default
   pdf_document: default
+  html_notebook: default
 ---
+
 ## Abstract
-scRNA-seq "data" poses a philosophical challenge to science. To even begin to understand it, we have to use dimensionality reduction methods, which inherently makes them very difficult to compare - "ground truth" in this case is the incomprehensible pile of data that is the count matrix. 
+scRNA-seq data poses a philosophical challenge to science. To even begin to understand it, we have to use dimensionality reduction methods, which inherently makes them very difficult to compare - "ground truth" in this case is the incomprehensible pile of data that is the count matrix. 
 
 I looked into the data from [Jansky et al.](https://www.nature.com/articles/s41588-021-00806-1). They scRNA-sequenced the developing adrenal gland from human embryos, and I used only the adrenal medulla subset of that data, as that is the site of interesting biology for neuroblastoma. I used primarily UMAP and multiscale PHATE for dimensionality reduciton. I compared the effects of feature selection (all genes - noisy plots, variable genes - tighter plots) and scaling (uncertain, but no advantage of scaled over unscaled) on the resulting plots, and zoomed into the bridge-connecting chromaffin-neuroblast trajectory, finding a potential new subpopulation between connecting chromaffins and early neuroblasts. Lastly, I ran multiscale PHATE on combined data from Jansky et al. and [Kameneva et al.](https://www.nature.com/articles/s41588-021-00818-x), finding an unexpected fluke of unknown origin that would have otherwise gone unnoticed. 
 
@@ -28,8 +29,6 @@ library(RColorBrewer)
 The basic premise of neuroblastoma is that neuroblasts fail to progress to their final differentiation state (stopping at different points on their trajectory for different patients). They arise from bridge cells (themselves from migrating neural crest cells). The trajectory is as follows: bridge into Schwann Cell Precursors (SCPs) and connecting chromaffins, connecting chromaffins into mature chromaffins and neuroblasts.
 
 I compared a newly written dimensionality reduction method, multiscale PHATE, to UMAP, PCA, and tSNE. The latter three are built into Seurat, but the former has to be run in a separate Python script (it can also be run inside an R notebook such as this, but I found that to be slower). Briefly, msPHATE first turns the data into a transition probability matrix, performs a random walk using that matrix, finds the informational distance between resulting points, and plots that as the dimensionality reduced embedding (this is the PHATE component). Then, the data is progressively smoothed, magnifying any pre-existing density heterogeneity and generating natural groupings at multiple scales, resulting in a 3D "tree" that starts with very fine points at its base (individual cells) and ends with coarser natural groupings at the top. The multiple "salient levels of resolution" that one can slice the tree at are also used to break up the embedding into different numbers of clusters, which is what we are interested in for finding cell types within our data. 
-
-![An msPHATE tree](~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/tree.png)
 
 Another great thing about msPHATE is that the clusters it generates (at any coarseness) can be zoomed into (called "re-embedding" in the literature). I only used the finest coarseness (i.e., each point on the embedding corresponds to a single cell) because all metadata in the Seurat object needs to be for individual cells, but the zooming in capability was very useful. The end point of this project was zooming into the bridge - connecting chromaffin - neuroblast axis in the hope that sequences of a future neuroblastoma cell line experiment at CCB will map at different points on the same trajectory.
 
@@ -358,9 +357,12 @@ DimPlot(bcn_ms, reduction = 'msphate_unscaled', group.by = 'msphate_subclusters_
 Both plots show a new population of cells between clear chromaffins and clear neuroblasts (cluster 3 for scaled and unscaled).
 
 To investigate this, we introduce a heatmap plot, a way of showing genes characterising each cluster.
-```{r}
+```{r, echo=FALSE}
 Idents(bcn_ms) <- bcn_ms$jansky_idents
 bcn_ms <- FindVariableFeatures(bcn_ms)
+```
+
+```{r}
 bcn_ms_jansky_markers <- FindAllMarkers(bcn_ms, features = VariableFeatures(bcn_ms))
 bcn_ms_jansky_markers %>%
   group_by(cluster) %>%
@@ -368,9 +370,12 @@ bcn_ms_jansky_markers %>%
 DoHeatmap(bcn_ms, features = top10$gene, label = FALSE)
 ```
 
-```{r}
+```{r, echo=FALSE}
 Idents(bcn_ms) <- bcn_ms$msphate_subclusters_lvl4_scaled
 bcn_ms <- FindVariableFeatures(bcn_ms)
+```
+
+```{r, echo=FALSE}
 bcn_ms_scaled_lvl4_markers <- FindAllMarkers(bcn_ms, features = VariableFeatures(bcn_ms))
 bcn_ms_scaled_lvl4_markers %>%
   group_by(cluster) %>%
@@ -380,7 +385,7 @@ DimPlot(bcn_ms, reduction = 'msphate_scaled', group.by = 'msphate_subclusters_lv
 DimPlot(bcn_ms, reduction = 'msphate_scaled', group.by = 'jansky_idents', pt.size = 1) + ggtitle('bcn_ms msphate_scaled by jansky_idents')
 ```
 
-```{r}
+```{r, echo=FALSE}
 Idents(bcn_ms) <- bcn_ms$msphate_subclusters_lvl4_unscaled
 bcn_ms <- FindVariableFeatures(bcn_ms)
 bcn_ms_unscaled_lvl4_markers <- FindAllMarkers(bcn_ms, features = VariableFeatures(bcn_ms))
@@ -462,6 +467,7 @@ What's going on here? Only when using scaled combined data with msPHATE did a st
 ### Conclusions
 - Using all genes results in a very noisy embedding compared to using the most variable genes
 - Scaling vs not scaling the data is not a clear choice
+- Scaling "pulls out" cells into separate clusters based on smaller differences in gene expression
 - Different dimensionality reduction methods can find different things about the data, affecting QC, annotation, and interpretation
 - Simulated data informed by real data may be better for comparing different algorithms
 
@@ -470,4 +476,10 @@ What's going on here? Only when using scaled combined data with msPHATE did a st
 - Do Louvain clusters at a lower resolution correspond to final assigned idents as well as msPHATE clusters "out of the box"?
 - Does "Louvain with multiscale adjustment" fix zooming into UMAP clusters?
 - What features is msPHATE using to make clusters for the all gene data? Is it noise, or are they interesting high-level groupings in the data?
-- etc
+- So much more...
+
+
+## Ackowledgements
+
+Many thanks to Dr Katherine Pillman for directing my work and teaching me all I know about bioinformatics
+Also thanks to Dr Nick Warnock and David Lawrence (also Centre for Cancer Biology at UniSA) for insightful discussions, code suggestions, etc
