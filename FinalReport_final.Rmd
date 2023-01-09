@@ -12,7 +12,7 @@ scRNA-seq data poses a philosophical challenge to science. To even begin to unde
 
 I looked into the data from [Jansky et al.](https://www.nature.com/articles/s41588-021-00806-1). They scRNA-sequenced the developing adrenal gland from human embryos, and I used only the adrenal medulla subset of that data, as that is the site of interesting biology for neuroblastoma. I used primarily UMAP and multiscale PHATE for dimensionality reduciton. I compared the effects of feature selection (all genes - noisy plots, variable genes - tighter plots) and scaling (uncertain, but no advantage of scaled over unscaled) on the resulting plots, and zoomed into the bridge-connecting chromaffin-neuroblast trajectory, finding a potential new subpopulation between connecting chromaffins and early neuroblasts. Lastly, I ran multiscale PHATE on combined data from Jansky et al. and [Kameneva et al.](https://www.nature.com/articles/s41588-021-00818-x), finding an unexpected fluke of unknown origin that would have otherwise gone unnoticed. 
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 library(dplyr)
 library(Seurat)
 library(patchwork)
@@ -95,7 +95,7 @@ def clus(clustering_level, vis_level = 0):
 This code is to load in previously made objects without rerunning intensive analyses.
 ```{r}
 ## RESTART ##
-wdir <- '~/Jansky/ms_phate/msphate_jansky/msPHATE-Seurat/'
+wdir <- '~/msPHATE-Seurat/'
 
 data_name <- 'seurats/med_final.RDS'
 med <- readRDS(paste(wdir, data_name, sep = ''))
@@ -117,7 +117,7 @@ comb <- LoadH5Seurat(file = paste(wdir, data_name, sep = ''))
 ### Running the analyses
 Jansky et al. used the top 2000 most variable genes for dimensionality reduction, standard procedure in scRNA-seq analyses. What would happen if we used all genes instead?
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 top_varfeats_global <- head(VariableFeatures(med), 10)
 LabelPoints(VariableFeaturePlot(med), points = top_varfeats_global, repel = TRUE)
 ```
@@ -250,6 +250,7 @@ DimPlot(med, reduction = 'umap_2k', group.by = 'jansky_idents', pt.size = 1) + g
 Two big differences here. For example, msPHATE incorporates into connecting chromaffins half of what Louvain combines with the bridge population. It also combines into one a lot of the neuroblast clusters that the Louvain algorithm separated. Would Jansky et al. have separated neuroblasts or chromaffins the way they did had they used msPHATE..?
 
 ### tSNE section
+
 Finally, a quick look at tSNE.
 ```{r, echo=FALSE}
 DimPlot(med, reduction = 'tsne_2k', group.by = 'jansky_idents', pt.size = 1) + ggtitle('tsne_2k by jansky_idents')
@@ -362,7 +363,7 @@ Idents(bcn_ms) <- bcn_ms$jansky_idents
 bcn_ms <- FindVariableFeatures(bcn_ms)
 ```
 
-```{r}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 bcn_ms_jansky_markers <- FindAllMarkers(bcn_ms, features = VariableFeatures(bcn_ms))
 bcn_ms_jansky_markers %>%
   group_by(cluster) %>%
@@ -370,12 +371,12 @@ bcn_ms_jansky_markers %>%
 DoHeatmap(bcn_ms, features = top10$gene, label = FALSE)
 ```
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 Idents(bcn_ms) <- bcn_ms$msphate_subclusters_lvl4_scaled
 bcn_ms <- FindVariableFeatures(bcn_ms)
 ```
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 bcn_ms_scaled_lvl4_markers <- FindAllMarkers(bcn_ms, features = VariableFeatures(bcn_ms))
 bcn_ms_scaled_lvl4_markers %>%
   group_by(cluster) %>%
@@ -438,7 +439,7 @@ Far from conclusive, but this is the kind of process I would use to identify int
 Towards the end of this project, I received a combined dataset of Jansky et al. and Kameneva et al.
 
 Let's import it!
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 rm(bcn)
 rm(bcn_ms)
 data_name <- 'seurats/comb_final.h5Seurat'
