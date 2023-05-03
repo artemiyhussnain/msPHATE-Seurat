@@ -1,7 +1,7 @@
 ### msPHATE-Seurat
 
 #### What is this?
-I integrated **multiscale PHATE** with **Seurat**, using scRNA-seq data on the developing adrenal medulla from [Jansky et al.](https://www.nature.com/articles/s41588-021-00806-1), and analysed the results as best I could
+I integrated **multiscale PHATE** with **Seurat**, using scRNA-seq data on the developing adrenal medulla from [Jansky et al.](https://www.nature.com/articles/s41588-021-00806-1), and analysed the results as best I could. Please see the final report [here](https://htmlpreview.github.io/?https://github.com/artemiyhussnain/msPHATE-Seurat/blob/main/FinalReport_final.html) (this is an html preview). 
 
 This was my first serious programming project, done as part of a [Vacation Research Scholarship](https://www.unisa.edu.au/research/degrees/scholarships/vacation-research-scholarships/#clinical-health) with UniSA in Adelaide
 
